@@ -16,15 +16,15 @@ function wppc_plugin_activate()
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
         $sql = "CREATE TABLE `{$wpdb->prefix}postmeta_wppc` (
-            `meta_id` bigint(20) UNSIGNED NOT NULL,
-            `post_id` bigint(20) UNSIGNED NOT NULL,
-            `meta_key` varchar(255) NOT NULL,
-            `meta_value` longtext DEFAULT NULL
+            `meta_id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            `post_id` BIGINT(20) UNSIGNED NOT NULL,
+            `meta_key` VARCHAR(255) NOT NULL,
+            `meta_value` LONGTEXT DEFAULT NULL,
+            PRIMARY KEY (`meta_id`),
+            KEY `post_id` (`post_id`),
+            KEY `meta_key` (`meta_key`(191))
         ) ENGINE=MyISAM {$charset_collate};
-        ALTER TABLE `{$wpdb->prefix}postmeta_wppc` ADD PRIMARY KEY (`meta_id`), ADD KEY `post_id` (`post_id`), ADD KEY `meta_key` (`meta_key`(191));
-        ALTER TABLE `{$wpdb->prefix}postmeta_wppc` MODIFY `meta_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
         ";
-
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
     }
