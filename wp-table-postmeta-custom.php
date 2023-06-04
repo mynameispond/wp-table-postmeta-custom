@@ -3,7 +3,7 @@
 Plugin Name: WP Table Postmeta Custom
 Plugin URI: https://github.com/mynameispond/wp-table-postmeta-custom
 Description: New Table Postmeta and new function
-Version: 0.0.1
+Version: 0.2.0
 Author: mynameispond
 Author URI: https://github.com/mynameispond
 */
