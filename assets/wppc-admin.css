@@ -1,0 +1,146 @@
+.wppc-admin-wrap {
+	max-width: 1200px;
+}
+
+.wppc-admin-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.wppc-admin-head h1 {
+	margin-bottom: 6px;
+}
+
+.wppc-admin-subtitle {
+	margin: 0;
+	color: #50575e;
+}
+
+.wppc-card {
+	background: #ffffff;
+	border: 1px solid #dcdcde;
+	border-radius: 10px;
+	padding: 18px;
+	margin-top: 16px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.wppc-card h2 {
+	margin-top: 0;
+}
+
+.wppc-nav-tab-wrapper {
+	margin-top: 4px;
+	margin-bottom: 16px;
+}
+
+.wppc-main-nav {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 10px;
+	margin: 2px 0 10px;
+}
+
+.wppc-main-nav-item {
+	display: block;
+	padding: 12px 14px;
+	border: 1px solid #d0d9e2;
+	border-radius: 10px;
+	background: #ffffff;
+	color: #1f2937;
+	text-decoration: none;
+	box-shadow: 0 1px 1px rgba(15, 23, 42, 0.05);
+	transition: all 0.18s ease;
+}
+
+.wppc-main-nav-item:hover {
+	border-color: #9fc4eb;
+	background: #f8fbff;
+	color: #0f172a;
+}
+
+.wppc-main-nav-item:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.wppc-main-nav-item.is-active {
+	border-color: #2271b1;
+	background: linear-gradient(135deg, #eef6ff 0%, #f6fbff 100%);
+	box-shadow: 0 0 0 1px rgba(34, 113, 177, 0.15);
+}
+
+.wppc-main-nav-title {
+	display: block;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.wppc-main-nav-desc {
+	display: block;
+	margin-top: 3px;
+	font-size: 12px;
+	line-height: 1.45;
+	color: #475569;
+}
+
+.wppc-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.wppc-card-metrics .wppc-metric-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+}
+
+.wppc-metric-item {
+	border: 1px solid #e2e4e7;
+	border-radius: 8px;
+	padding: 12px;
+	background: #f9fafb;
+}
+
+.wppc-metric-label {
+	display: block;
+	color: #50575e;
+	margin-bottom: 6px;
+}
+
+.wppc-metric-value {
+	font-size: 24px;
+	line-height: 1.2;
+}
+
+.wppc-inline-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.wppc-inline-form {
+	display: inline-block;
+	margin: 0;
+}
+
+.wppc-faded {
+	color: #646970;
+}
+
+.wppc-table-scroll {
+	overflow-x: auto;
+}
+
+@media (max-width: 782px) {
+	.wppc-main-nav {
+		grid-template-columns: 1fr;
+	}
+}
