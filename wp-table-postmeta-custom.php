@@ -137,7 +137,9 @@ function wppc_create_meta_table($slug)
         meta_value longtext,
         PRIMARY KEY  (meta_id),
         UNIQUE KEY uniq_post_id_meta_key (post_id, meta_key),
-        KEY meta_key (meta_key)
+        KEY meta_key (meta_key),
+        KEY idx_meta_key_post_id (meta_key, post_id),
+        KEY idx_post_id_meta_key_value (post_id, meta_key, meta_value(191))
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -1683,38 +1685,6 @@ function wppc_render_data_manager_page()
     echo '</div>';
 
     echo '<div class="wppc-grid">';
-    echo '<div class="wppc-card">';
-    echo '<h2>จัดการดัชนี (Index) เพื่อเพิ่มความเร็วค้นหา</h2>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '">';
-    wp_nonce_field('wppc_add_index');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="add_index">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<select name="index_preset">';
-    foreach (wppc_get_index_presets() as $preset_key => $preset) {
-        echo '<option value="' . esc_attr($preset_key) . '">' . esc_html($preset['label']) . ' (' . esc_html($preset_key) . ')</option>';
-    }
-    echo '</select> <button type="submit" class="button">เพิ่มดัชนี</button>';
-    echo '</form>';
-
-    $has_drop_candidate = false;
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '">';
-    wp_nonce_field('wppc_drop_index');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="drop_index">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<select name="index_name">';
-    foreach ($indexes as $index) {
-        if ($index['name'] === 'PRIMARY' || $index['name'] === 'uniq_post_id_meta_key') {
-            continue;
-        }
-        $has_drop_candidate = true;
-        echo '<option value="' . esc_attr($index['name']) . '">' . esc_html($index['name'] . ' (' . implode(', ', $index['columns']) . ')') . '</option>';
-    }
-    echo '</select> <button type="submit" class="button button-link-delete" ' . ($has_drop_candidate ? '' : 'disabled') . ' onclick="return confirm(\'ยืนยันการลบดัชนี?\');">ลบดัชนี</button>';
-    echo '</form>';
-    echo '</div>';
-
     echo '<div class="wppc-card">';
     echo '<h2>นำเข้า/ส่งออกข้อมูล</h2>';
     echo '<p><a class="button" href="' . esc_url($export_json_url) . '">ส่งออก JSON</a> <a class="button" href="' . esc_url($export_csv_url) . '">ส่งออก CSV</a></p>';
