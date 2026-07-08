@@ -1484,19 +1484,8 @@ function wppc_render_data_manager_page()
     $per_page = 20;
     $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $paged, $per_page);
     $total_pages = max(1, (int) ceil($records['total'] / $per_page));
-    $indexes = wppc_get_table_indexes($slug);
-    $sync_state = wppc_get_sync_state($slug);
     $edit_id = isset($_GET['edit_id']) ? absint($_GET['edit_id']) : 0;
     $edit_row = $edit_id > 0 ? wppc_get_record_by_id($slug, $edit_id) : null;
-
-    $export_json_url = wp_nonce_url(
-        wppc_admin_url('wppc-data-manager', array('table' => $slug, 'wppc_action' => 'export_data', 'format' => 'json')),
-        'wppc_export_data_json'
-    );
-    $export_csv_url = wp_nonce_url(
-        wppc_admin_url('wppc-data-manager', array('table' => $slug, 'wppc_action' => 'export_data', 'format' => 'csv')),
-        'wppc_export_data_csv'
-    );
 
     wppc_render_admin_page_header(
         'จัดการข้อมูลตาราง',
