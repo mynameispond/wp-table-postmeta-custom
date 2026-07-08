@@ -266,14 +266,99 @@
 
 .wppc-faded {
     color: var(--wppc-text-light);
+    font-size: var(--wppc-font-size-sm);
 }
 
 .wppc-table-scroll {
     overflow-x: auto;
+    margin-top: 10px;
+}
+
+/* ==========================================================================
+   Tables & Inputs Style Overrides
+   ========================================================================== */
+.wppc-admin-wrap table.widefat {
+    border: 1px solid var(--wppc-border-light);
+    box-shadow: none;
+    font-size: var(--wppc-font-size-base);
+}
+
+.wppc-admin-wrap table.widefat thead th {
+    border-bottom: 2px solid var(--wppc-border-light);
+    background: var(--wppc-bg-light);
+    color: var(--wppc-text-dark);
+    font-weight: 600;
+    font-size: var(--wppc-font-size-base);
+    padding: 10px 12px;
+}
+
+.wppc-admin-wrap table.widefat tbody td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    color: var(--wppc-text-gray);
+}
+
+.wppc-admin-wrap table.form-table th {
+    font-size: var(--wppc-font-size-base);
+    color: var(--wppc-text-dark);
+    font-weight: 600;
+    padding: 12px 10px 12px 0;
+    width: 180px;
+}
+
+.wppc-admin-wrap table.form-table td {
+    padding: 8px 10px;
+}
+
+.wppc-admin-wrap input[type="text"],
+.wppc-admin-wrap input[type="number"],
+.wppc-admin-wrap input[type="search"],
+.wppc-admin-wrap textarea,
+.wppc-admin-wrap select {
+    border: 1px solid var(--wppc-border-light);
+    border-radius: var(--wppc-border-radius);
+    background: var(--wppc-bg-white);
+    color: var(--wppc-text-dark);
+    font-size: var(--wppc-font-size-base);
+    padding: 6px 10px;
+    box-shadow: none;
+    transition: border-color 0.1s ease;
+    max-width: 100%;
+}
+
+.wppc-admin-wrap input[type="text"]:focus,
+.wppc-admin-wrap input[type="number"]:focus,
+.wppc-admin-wrap input[type="search"]:focus,
+.wppc-admin-wrap textarea:focus,
+.wppc-admin-wrap select:focus {
+    border-color: var(--wppc-border-dark);
+    box-shadow: none;
+    outline: none;
+}
+
+/* Pagination styles */
+.wppc-admin-wrap .tablenav-pages a {
+    border: 1px solid var(--wppc-border-light);
+    background: var(--wppc-bg-white);
+    color: var(--wppc-text-gray);
+    padding: 4px 8px;
+    text-decoration: none;
+    font-size: var(--wppc-font-size-sm);
+    border-radius: var(--wppc-border-radius);
+}
+
+.wppc-admin-wrap .tablenav-pages a:hover {
+    background: var(--wppc-bg-accent);
+    color: var(--wppc-text-dark);
+    border-color: var(--wppc-text-light);
 }
 
 @media (max-width: 782px) {
     .wppc-main-nav {
         grid-template-columns: 1fr;
+    }
+    .wppc-admin-wrap table.form-table th {
+        width: auto;
+        padding: 10px 0 4px;
     }
 }
