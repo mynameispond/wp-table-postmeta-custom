@@ -918,6 +918,11 @@ function wppc_import_rows_from_csv_file($tmp_path)
         return new WP_Error('invalid_csv_header', 'ไม่พบหัวคอลัมน์ในไฟล์ CSV');
     }
 
+    // Strip UTF-8 BOM if present on the first column header
+    if (isset($header[0]) && strpos($header[0], "\xEF\xBB\xBF") === 0) {
+        $header[0] = substr($header[0], 3);
+    }
+
     $normalized_header = array_map(function ($column) {
         return strtolower(trim((string) $column));
     }, $header);
@@ -996,6 +1001,8 @@ function wppc_stream_export_table_data($slug, $format)
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
     $output = fopen('php://output', 'w');
+    // แนบ UTF-8 BOM เพื่อความเข้ากันได้กับ Excel ภาษาไทย
+    fwrite($output, "\xEF\xBB\xBF");
     fputcsv($output, array('meta_id', 'post_id', 'meta_key', 'meta_value'));
     foreach ($rows as $row) {
         fputcsv($output, array(
@@ -1703,30 +1710,59 @@ function wppc_render_data_manager_page()
 
     echo '<div class="wppc-card">';
     echo '<h2>ซิงก์ข้อมูลกับ wp_postmeta</h2>';
-    echo '<p>สถานะล่าสุด: <strong>' . esc_html(!empty($sync_state['running']) ? 'กำลังทำงาน' : 'หยุดอยู่') . '</strong></p>';
-    echo '<p>ทิศทาง: <code>' . esc_html($sync_state['direction']) . '</code>, cursor: <code>' . esc_html((string) $sync_state['cursor']) . '</code>, copied: <code>' . esc_html((string) $sync_state['copied']) . '</code>, skipped: <code>' . esc_html((string) $sync_state['skipped']) . '</code></p>';
+    echo '<div class="wppc-sync-container">';
+    
+    // Column 1: Status
+    echo '<div class="wppc-sync-status-section">';
+    echo '<h3>สถานะการซิงก์ปัจจุบัน</h3>';
+    echo '<table class="wppc-sync-status-table">';
+    echo '<tr><th>สถานะ</th><td><span class="wppc-status-badge ' . (!empty($sync_state['running']) ? 'is-running' : 'is-stopped') . '">' . esc_html(!empty($sync_state['running']) ? 'กำลังทำงาน' : 'หยุดอยู่') . '</span></td></tr>';
+    echo '<tr><th>ทิศทาง</th><td><code>' . esc_html($sync_state['direction'] === 'to_main' ? 'ตารางย่อย -> wp_postmeta' : 'wp_postmeta -> ตารางย่อย') . '</code></td></tr>';
+    echo '<tr><th>Cursor (meta_id)</th><td><code>' . esc_html((string) $sync_state['cursor']) . '</code></td></tr>';
+    echo '<tr><th>สำเร็จ / ข้าม</th><td><strong>' . esc_html((string) $sync_state['copied']) . '</strong> / <span class="wppc-faded">' . esc_html((string) $sync_state['skipped']) . '</span></td></tr>';
     if (!empty($sync_state['last_message'])) {
-        echo '<p>ข้อความล่าสุด: ' . esc_html($sync_state['last_message']) . '</p>';
+        echo '<tr><th>ข้อความล่าสุด</th><td><span class="wppc-sync-message">' . esc_html($sync_state['last_message']) . '</span></td></tr>';
     }
-    echo '<div class="wppc-inline-actions">';
+    echo '</table>';
+    echo '</div>';
 
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-inline-form">';
+    // Column 2: Controls
+    echo '<div class="wppc-sync-controls-section">';
+    echo '<h3>การควบคุมและการตั้งค่า</h3>';
+    
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-sync-form-group">';
     wp_nonce_field('wppc_sync_start');
     echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_start"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<select name="sync_direction"><option value="from_main">จาก wp_postmeta ไปตารางนี้</option><option value="to_main">จากตารางนี้ไป wp_postmeta</option></select> ';
-    echo '<input type="number" name="sync_batch_size" min="10" max="1000" value="' . esc_attr($sync_state['batch_size']) . '" style="width:96px;"> ';
-    echo '<button type="submit" class="button button-primary">เริ่มซิงก์</button></form>';
-
+    
+    echo '<div class="wppc-form-row">';
+    echo '<label>ทิศทาง:</label>';
+    echo '<select name="sync_direction"><option value="from_main" ' . selected($sync_state['direction'], 'from_main', false) . '>wp_postmeta -> ตารางย่อย</option><option value="to_main" ' . selected($sync_state['direction'], 'to_main', false) . '>ตารางย่อย -> wp_postmeta</option></select>';
+    echo '</div>';
+    
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>ขนาด Batch:</label>';
+    echo '<input type="number" name="sync_batch_size" min="10" max="1000" value="' . esc_attr($sync_state['batch_size']) . '" style="width:90px;"> ';
+    echo '</div>';
+    
+    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
+    echo '<button type="submit" class="button button-primary">เริ่มการซิงก์</button>';
+    echo '</div>';
+    echo '</form>';
+    
+    echo '<div class="wppc-sync-actions-group">';
     echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-inline-form">';
     wp_nonce_field('wppc_sync_run_batch');
     echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_run_batch"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button">รันซิงก์ 1 รอบ</button></form>';
+    echo '<button type="submit" class="button" ' . (empty($sync_state['running']) ? 'disabled' : '') . '>รันซิงก์ 1 รอบ</button></form> ';
 
     echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-inline-form">';
     wp_nonce_field('wppc_sync_reset');
     echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_reset"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button button-link-delete">รีเซ็ตสถานะซิงก์</button></form>';
+    echo '<button type="submit" class="button button-link-delete">รีเซ็ตสถานะ</button></form>';
     echo '</div>';
+    
+    echo '</div>'; // wppc-sync-controls-section
+    echo '</div>'; // wppc-sync-container
     echo '</div>';
 
     echo '<div class="wppc-card">';
