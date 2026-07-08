@@ -212,8 +212,8 @@
     font-size: var(--wppc-font-size-base);
     font-weight: 500;
     line-height: 1.2;
-    height: auto;
-    min-height: 30px;
+    box-sizing: border-box !important;
+    height: 30px !important;
     box-shadow: none;
     text-shadow: none;
     cursor: pointer;
@@ -324,8 +324,23 @@
 .wppc-admin-wrap input[type="text"],
 .wppc-admin-wrap input[type="number"],
 .wppc-admin-wrap input[type="search"],
-.wppc-admin-wrap textarea,
 .wppc-admin-wrap select {
+    box-sizing: border-box !important;
+    height: 30px;
+    border: 1px solid var(--wppc-border-light);
+    border-radius: var(--wppc-border-radius);
+    background: var(--wppc-bg-white);
+    color: var(--wppc-text-dark);
+    font-size: var(--wppc-font-size-base);
+    padding: 6px 10px;
+    box-shadow: none;
+    transition: border-color 0.1s ease;
+    max-width: 100%;
+}
+
+.wppc-admin-wrap textarea {
+    box-sizing: border-box !important;
+    height: auto;
     border: 1px solid var(--wppc-border-light);
     border-radius: var(--wppc-border-radius);
     background: var(--wppc-bg-white);
