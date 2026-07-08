@@ -710,7 +710,7 @@ function wppc_get_table_row_count($slug)
     return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_sql}");
 }
 
-function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = '', $paged = 1, $per_page = 20)
+function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = '', $meta_value_filter = '', $paged = 1, $per_page = 20)
 {
     global $wpdb;
     $slug = wppc_normalize_slug($slug);
@@ -728,6 +728,7 @@ function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = 
     $offset = ($paged - 1) * $per_page;
     $post_id_filter = trim((string) $post_id_filter);
     $meta_key_filter = trim((string) $meta_key_filter);
+    $meta_value_filter = trim((string) $meta_value_filter);
     $where_parts = array();
     $where_values = array();
 
@@ -739,6 +740,11 @@ function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = 
     if ($meta_key_filter !== '') {
         $where_parts[] = 'meta_key LIKE %s';
         $where_values[] = '%' . $wpdb->esc_like($meta_key_filter) . '%';
+    }
+
+    if ($meta_value_filter !== '') {
+        $where_parts[] = 'meta_value LIKE %s';
+        $where_values[] = '%' . $wpdb->esc_like($meta_value_filter) . '%';
     }
 
     $where_sql = empty($where_parts) ? '' : ' WHERE ' . implode(' AND ', $where_parts);
@@ -1518,9 +1524,10 @@ function wppc_render_data_manager_page()
     $slug = wppc_get_admin_active_slug();
     $post_id_filter = isset($_GET['filter_post_id']) ? sanitize_text_field(wp_unslash($_GET['filter_post_id'])) : '';
     $meta_key_filter = isset($_GET['filter_meta_key']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_key'])) : '';
+    $meta_value_filter = isset($_GET['filter_meta_value']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_value'])) : '';
     $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
     $per_page = 20;
-    $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $paged, $per_page);
+    $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged, $per_page);
     $total_pages = max(1, (int) ceil($records['total'] / $per_page));
     $edit_id = isset($_GET['edit_id']) ? absint($_GET['edit_id']) : 0;
     $edit_row = $edit_id > 0 ? wppc_get_record_by_id($slug, $edit_id) : null;
@@ -1638,8 +1645,9 @@ function wppc_render_data_manager_page()
     echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
     echo '<input type="number" name="filter_post_id" min="1" value="' . esc_attr($post_id_filter) . '" placeholder="post_id" style="width:120px;"> ';
     echo '<input type="search" name="filter_meta_key" value="' . esc_attr($meta_key_filter) . '" placeholder="meta_key"> ';
+    echo '<input type="search" name="filter_meta_value" value="' . esc_attr($meta_value_filter) . '" placeholder="meta_value"> ';
     echo '<button type="submit" class="button">ค้นหา</button> ';
-    if ($post_id_filter !== '' || $meta_key_filter !== '') {
+    if ($post_id_filter !== '' || $meta_key_filter !== '' || $meta_value_filter !== '') {
         echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
     }
     echo '</form>';
@@ -1658,6 +1666,7 @@ function wppc_render_data_manager_page()
                 'paged' => $paged,
                 'filter_post_id' => $post_id_filter,
                 'filter_meta_key' => $meta_key_filter,
+                'filter_meta_value' => $meta_value_filter,
                 'edit_id' => $row['meta_id'],
             ));
             echo '<tr>';
@@ -1682,6 +1691,7 @@ function wppc_render_data_manager_page()
                 'table' => $slug,
                 'filter_post_id' => $post_id_filter,
                 'filter_meta_key' => $meta_key_filter,
+                'filter_meta_value' => $meta_value_filter,
                 'paged' => $i,
             ));
             $style = $i === $paged ? 'style="font-weight:700;text-decoration:underline;"' : '';
