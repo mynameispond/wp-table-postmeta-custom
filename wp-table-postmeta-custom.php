@@ -158,6 +158,14 @@ function wppc_create_meta_table($slug)
         wppc_save_registered_slugs($slugs);
     }
 
+    /**
+     * Fires after a custom postmeta table is created.
+     *
+     * @param string $slug       The table slug.
+     * @param string $table_name The full table name in the database.
+     */
+    do_action('wppc_table_created', $slug, $table_name);
+
     return true;
 }
 
@@ -189,6 +197,14 @@ function wppc_drop_meta_table($slug)
         unset($sync_states[$slug]);
         update_option(WPPC_SYNC_STATE_OPTION, $sync_states, false);
     }
+
+    /**
+     * Fires after a custom postmeta table is dropped.
+     *
+     * @param string $slug       The table slug that was removed.
+     * @param string $table_name The full table name that was dropped.
+     */
+    do_action('wppc_table_dropped', $slug, $table_name);
 
     return true;
 }
@@ -295,6 +311,17 @@ function wppc_update_post_meta($table_slug, $post_id, $meta_key, $meta_value)
     $table_sql = wppc_escape_identifier($table_name);
     $stored_value = wppc_prepare_meta_value_for_store($meta_value);
 
+    /**
+     * Filters the meta value before it is saved to the custom table.
+     *
+     * @param string $stored_value The serialized/prepared value to store.
+     * @param string $table_slug   The table slug.
+     * @param int    $post_id      The post ID.
+     * @param string $meta_key     The meta key.
+     * @param mixed  $meta_value   The original (raw) meta value.
+     */
+    $stored_value = apply_filters('wppc_pre_update_meta_value', $stored_value, $table_slug, $post_id, $meta_key, $meta_value);
+
     $existing_id = $wpdb->get_var(
         $wpdb->prepare(
             "SELECT meta_id FROM {$table_sql} WHERE post_id = %d AND meta_key = %s ORDER BY meta_id DESC LIMIT 1",
@@ -311,18 +338,32 @@ function wppc_update_post_meta($table_slug, $post_id, $meta_key, $meta_value)
             array('%s'),
             array('%d')
         );
-        return $updated !== false;
+        $success = $updated !== false;
+    } else {
+        $success = (bool) $wpdb->insert(
+            $table_name,
+            array(
+                'post_id' => $post_id,
+                'meta_key' => $meta_key,
+                'meta_value' => $stored_value,
+            ),
+            array('%d', '%s', '%s')
+        );
     }
 
-    return (bool) $wpdb->insert(
-        $table_name,
-        array(
-            'post_id' => $post_id,
-            'meta_key' => $meta_key,
-            'meta_value' => $stored_value,
-        ),
-        array('%d', '%s', '%s')
-    );
+    if ($success) {
+        /**
+         * Fires after a meta value is successfully inserted or updated.
+         *
+         * @param string $table_slug The table slug.
+         * @param int    $post_id    The post ID.
+         * @param string $meta_key   The meta key.
+         * @param string $stored_value The value that was stored.
+         */
+        do_action('wppc_updated_post_meta', $table_slug, $post_id, $meta_key, $stored_value);
+    }
+
+    return $success;
 }
 
 function wppc_delete_post_meta($table_slug, $post_id, $meta_key, $meta_value = null)
@@ -342,8 +383,9 @@ function wppc_delete_post_meta($table_slug, $post_id, $meta_key, $meta_value = n
 
     $table_name = wppc_get_table_name($table_slug);
     $table_sql = wppc_escape_identifier($table_name);
+
     if ($meta_value !== null) {
-        return (bool) $wpdb->query(
+        $result = (bool) $wpdb->query(
             $wpdb->prepare(
                 "DELETE FROM {$table_sql} WHERE post_id = %d AND meta_key = %s AND meta_value = %s",
                 $post_id,
@@ -351,16 +393,29 @@ function wppc_delete_post_meta($table_slug, $post_id, $meta_key, $meta_value = n
                 wppc_prepare_meta_value_for_store($meta_value)
             )
         );
+    } else {
+        $result = (bool) $wpdb->delete(
+            $table_name,
+            array(
+                'post_id' => $post_id,
+                'meta_key' => $meta_key,
+            ),
+            array('%d', '%s')
+        );
     }
 
-    return (bool) $wpdb->delete(
-        $table_name,
-        array(
-            'post_id' => $post_id,
-            'meta_key' => $meta_key,
-        ),
-        array('%d', '%s')
-    );
+    if ($result) {
+        /**
+         * Fires after a meta row is successfully deleted.
+         *
+         * @param string $table_slug The table slug.
+         * @param int    $post_id    The post ID.
+         * @param string $meta_key   The meta key that was deleted.
+         */
+        do_action('wppc_deleted_post_meta', $table_slug, $post_id, $meta_key);
+    }
+
+    return $result;
 }
 
 function wppc_get_allowed_meta_compare_ops()
