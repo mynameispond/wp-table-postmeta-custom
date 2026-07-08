@@ -1033,6 +1033,7 @@ function wppc_get_sync_state($slug)
         'skipped' => 0,
         'updated_at' => '',
         'last_message' => '',
+        'keys' => array(),
     );
 
     $slug = wppc_normalize_slug($slug);
@@ -1070,6 +1071,7 @@ function wppc_reset_sync_state($slug)
         'batch_size' => 200,
         'copied' => 0,
         'skipped' => 0,
+        'keys' => array(),
         'last_message' => '',
     ));
 }
@@ -1139,11 +1141,19 @@ function wppc_run_sync_batch($slug)
     }
     $source_table_sql = wppc_escape_identifier($source_table);
 
+    $keys_filter = '';
+    $where_values = array($cursor);
+    if (!empty($state['keys']) && is_array($state['keys'])) {
+        $placeholders = implode(',', array_fill(0, count($state['keys']), '%s'));
+        $keys_filter = " AND meta_key IN ({$placeholders})";
+        $where_values = array_merge($where_values, $state['keys']);
+    }
+    $where_values[] = $batch_size;
+
     $rows = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT meta_id, post_id, meta_key, meta_value FROM {$source_table_sql} WHERE meta_id > %d ORDER BY meta_id ASC LIMIT %d",
-            $cursor,
-            $batch_size
+            "SELECT meta_id, post_id, meta_key, meta_value FROM {$source_table_sql} WHERE meta_id > %d{$keys_filter} ORDER BY meta_id ASC LIMIT %d",
+            $where_values
         ),
         ARRAY_A
     );
@@ -1401,6 +1411,18 @@ function wppc_handle_admin_actions()
             }
             $direction = isset($_POST['sync_direction']) && wp_unslash($_POST['sync_direction']) === 'to_main' ? 'to_main' : 'from_main';
             $batch_size = isset($_POST['sync_batch_size']) ? wppc_clamp_batch_size($_POST['sync_batch_size']) : 200;
+            $sync_keys_raw = isset($_POST['sync_keys']) ? sanitize_text_field(wp_unslash($_POST['sync_keys'])) : '';
+            $sync_keys = array();
+            if ($sync_keys_raw !== '') {
+                $parts = explode(',', $sync_keys_raw);
+                foreach ($parts as $part) {
+                    $key = wppc_normalize_meta_key($part);
+                    if ($key !== '') {
+                        $sync_keys[] = $key;
+                    }
+                }
+            }
+
             wppc_set_sync_state($slug, array(
                 'running' => true,
                 'direction' => $direction,
@@ -1408,6 +1430,7 @@ function wppc_handle_admin_actions()
                 'batch_size' => $batch_size,
                 'copied' => 0,
                 'skipped' => 0,
+                'keys' => $sync_keys,
                 'last_message' => 'เริ่มซิงก์แล้ว',
             ));
             wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'เริ่มซิงก์เรียบร้อย', array('table' => $slug));
@@ -1742,6 +1765,12 @@ function wppc_render_data_manager_page()
     echo '<div class="wppc-form-row" style="margin-top: 8px;">';
     echo '<label>ขนาด Batch:</label>';
     echo '<input type="number" name="sync_batch_size" min="10" max="1000" value="' . esc_attr($sync_state['batch_size']) . '" style="width:90px;"> ';
+    echo '</div>';
+
+    $keys_val = !empty($sync_state['keys']) && is_array($sync_state['keys']) ? implode(', ', $sync_state['keys']) : '';
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>คีย์ข้อมูล:</label>';
+    echo '<input type="text" name="sync_keys" value="' . esc_attr($keys_val) . '" placeholder="เช่น price, stock (เว้นว่างเพื่อซิงก์ทั้งหมด)" style="width:220px;"> ';
     echo '</div>';
     
     echo '<div class="wppc-form-row" style="margin-top: 12px;">';
