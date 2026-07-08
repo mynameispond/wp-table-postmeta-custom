@@ -388,3 +388,109 @@
         padding: 10px 0 4px;
     }
 }
+
+/* ==========================================================================
+   Sync Section Styles
+   ========================================================================== */
+.wppc-sync-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 15px;
+}
+
+.wppc-sync-status-section,
+.wppc-sync-controls-section {
+    border: 1px solid var(--wppc-border-light);
+    padding: 18px;
+    border-radius: var(--wppc-border-radius);
+    background: var(--wppc-bg-light);
+}
+
+.wppc-sync-status-section h3,
+.wppc-sync-controls-section h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: var(--wppc-font-size-base);
+    font-weight: 600;
+    color: var(--wppc-text-dark);
+    border-bottom: 1px solid var(--wppc-border-light);
+    padding-bottom: 6px;
+}
+
+.wppc-sync-status-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.wppc-sync-status-table th {
+    text-align: left;
+    font-size: var(--wppc-font-size-base);
+    color: var(--wppc-text-gray);
+    padding: 6px 0;
+    width: 130px;
+    font-weight: 500;
+}
+
+.wppc-sync-status-table td {
+    padding: 6px 0;
+    font-size: var(--wppc-font-size-base);
+    color: var(--wppc-text-dark);
+}
+
+.wppc-status-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: var(--wppc-font-size-sm);
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.wppc-status-badge.is-running {
+    background: var(--wppc-text-dark);
+    color: var(--wppc-bg-white);
+}
+
+.wppc-status-badge.is-stopped {
+    background: var(--wppc-bg-accent);
+    color: var(--wppc-text-gray);
+}
+
+.wppc-sync-message {
+    display: inline-block;
+    font-size: var(--wppc-font-size-sm);
+    color: #b91c1c;
+}
+
+.wppc-sync-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.wppc-form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wppc-form-row label {
+    font-size: var(--wppc-font-size-base);
+    color: var(--wppc-text-gray);
+    width: 120px;
+}
+
+.wppc-sync-actions-group {
+    display: flex;
+    gap: 10px;
+    border-top: 1px solid var(--wppc-border-light);
+    padding-top: 15px;
+    margin-top: 10px;
+}
+
+@media (max-width: 782px) {
+    .wppc-sync-container {
+        grid-template-columns: 1fr;
+    }
+}
