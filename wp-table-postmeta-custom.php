@@ -1374,7 +1374,7 @@ function wppc_render_overview_page()
 
     wppc_render_admin_page_header(
         'WP Postmeta Custom',
-        'หน้าจัดการหลายตาราง postmeta พร้อมเครื่องมือ index, import/export และ sync',
+        'หน้าจัดการหลายตาราง postmeta พร้อมเครื่องมือ import/export',
         'wppc-overview'
     );
 
