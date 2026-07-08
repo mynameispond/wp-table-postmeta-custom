@@ -950,6 +950,9 @@ function wppc_import_rows_into_table($slug, $rows, $target_type = 'custom')
     $inserted = 0;
     $skipped = 0;
 
+    // เริ่มธุรกรรมสำหรับการนำเข้าปริมาณสูงแบบประหยัดพลังงาน
+    $wpdb->query('START TRANSACTION');
+
     foreach ((array) $rows as $row) {
         if (!is_array($row)) {
             $skipped++;
@@ -973,6 +976,9 @@ function wppc_import_rows_into_table($slug, $rows, $target_type = 'custom')
             $skipped++;
         }
     }
+
+    // คอมมิตคำสั่งทั้งหมดเข้าสู่ดิสก์
+    $wpdb->query('COMMIT');
 
     return array('inserted' => $inserted, 'skipped' => $skipped);
 }
@@ -999,21 +1005,37 @@ function wppc_stream_export_table_data($slug, $format, $source_type = 'custom', 
         $where_values = $keys;
     }
 
-    $sql = "SELECT meta_id, post_id, meta_key, meta_value FROM {$table_sql}{$where_sql} ORDER BY meta_id ASC";
-    if (!empty($where_values)) {
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $where_values), ARRAY_A);
-    } else {
-        $rows = $wpdb->get_results($sql, ARRAY_A);
-    }
-
     $filename = 'wppc-' . ($source_type === 'main' ? 'wp_postmeta' : $slug) . '-' . gmdate('Ymd-His');
+    $batch_size = 5000;
 
     if ($format === 'json') {
         nocache_headers();
         header('Content-Type: application/json; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '.json"');
-        $encoded = wp_json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-        echo $encoded === false ? '[]' : $encoded;
+        echo '[';
+        $first = true;
+        $offset = 0;
+        do {
+            $chunk_sql = "SELECT meta_id, post_id, meta_key, meta_value FROM {$table_sql}{$where_sql} ORDER BY meta_id ASC LIMIT {$batch_size} OFFSET {$offset}";
+            $rows = !empty($where_values)
+                ? $wpdb->get_results($wpdb->prepare($chunk_sql, $where_values), ARRAY_A)
+                : $wpdb->get_results($chunk_sql, ARRAY_A);
+
+            if (empty($rows)) {
+                break;
+            }
+
+            foreach ($rows as $row) {
+                if (!$first) {
+                    echo ',';
+                }
+                echo wp_json_encode($row, JSON_UNESCAPED_UNICODE);
+                $first = false;
+            }
+            $offset += $batch_size;
+            unset($rows);
+        } while (true);
+        echo ']';
         exit;
     }
 
@@ -1024,14 +1046,30 @@ function wppc_stream_export_table_data($slug, $format, $source_type = 'custom', 
     // แนบ UTF-8 BOM เพื่อความเข้ากันได้กับ Excel ภาษาไทย
     fwrite($output, "\xEF\xBB\xBF");
     fputcsv($output, array('meta_id', 'post_id', 'meta_key', 'meta_value'));
-    foreach ($rows as $row) {
-        fputcsv($output, array(
-            isset($row['meta_id']) ? $row['meta_id'] : '',
-            isset($row['post_id']) ? $row['post_id'] : '',
-            isset($row['meta_key']) ? $row['meta_key'] : '',
-            isset($row['meta_value']) ? $row['meta_value'] : '',
-        ));
-    }
+
+    $offset = 0;
+    do {
+        $chunk_sql = "SELECT meta_id, post_id, meta_key, meta_value FROM {$table_sql}{$where_sql} ORDER BY meta_id ASC LIMIT {$batch_size} OFFSET {$offset}";
+        $rows = !empty($where_values)
+            ? $wpdb->get_results($wpdb->prepare($chunk_sql, $where_values), ARRAY_A)
+            : $wpdb->get_results($chunk_sql, ARRAY_A);
+
+        if (empty($rows)) {
+            break;
+        }
+
+        foreach ($rows as $row) {
+            fputcsv($output, array(
+                isset($row['meta_id']) ? $row['meta_id'] : '',
+                isset($row['post_id']) ? $row['post_id'] : '',
+                isset($row['meta_key']) ? $row['meta_key'] : '',
+                isset($row['meta_value']) ? $row['meta_value'] : '',
+            ));
+        }
+        $offset += $batch_size;
+        unset($rows);
+    } while (true);
+
     fclose($output);
     exit;
 }
