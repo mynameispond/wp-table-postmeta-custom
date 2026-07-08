@@ -184,6 +184,74 @@
     color: var(--wppc-text-dark);
 }
 
+/* ==========================================================================
+   Buttons Override
+   ========================================================================== */
+.wppc-admin-wrap .button,
+.wppc-admin-wrap button,
+.wppc-admin-wrap input[type="submit"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--wppc-bg-white);
+    color: var(--wppc-text-dark);
+    border: 1px solid var(--wppc-text-dark);
+    border-radius: var(--wppc-border-radius);
+    padding: 6px 12px;
+    font-size: var(--wppc-font-size-base);
+    font-weight: 500;
+    line-height: 1.2;
+    height: auto;
+    min-height: 30px;
+    box-shadow: none;
+    text-shadow: none;
+    cursor: pointer;
+    transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.wppc-admin-wrap .button:hover,
+.wppc-admin-wrap button:hover,
+.wppc-admin-wrap input[type="submit"]:hover {
+    background: var(--wppc-bg-accent);
+    color: var(--wppc-text-dark);
+    border-color: var(--wppc-text-dark);
+}
+
+.wppc-admin-wrap .button-primary,
+.wppc-admin-wrap input[type="submit"].button-primary {
+    background: var(--wppc-text-dark);
+    color: var(--wppc-bg-white);
+    border-color: var(--wppc-text-dark);
+}
+
+.wppc-admin-wrap .button-primary:hover,
+.wppc-admin-wrap input[type="submit"].button-primary:hover {
+    background: var(--wppc-bg-accent);
+    color: var(--wppc-text-dark);
+    border-color: var(--wppc-text-dark);
+}
+
+.wppc-admin-wrap .button-small {
+    padding: 3px 8px;
+    font-size: var(--wppc-font-size-sm);
+    min-height: 24px;
+}
+
+/* ปุ่มลบหรือการทำงานที่เป็นอันตราย */
+.wppc-admin-wrap .button-link-delete,
+.wppc-admin-wrap button.button-link-delete {
+    background: var(--wppc-bg-white);
+    color: #b91c1c; /* ใช้สีแดงหม่นสำหรับการลบเพื่อการแจ้งเตือน */
+    border-color: #b91c1c;
+}
+
+.wppc-admin-wrap .button-link-delete:hover,
+.wppc-admin-wrap button.button-link-delete:hover {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #991b1b;
+}
+
 .wppc-inline-actions {
     display: flex;
     flex-wrap: wrap;
