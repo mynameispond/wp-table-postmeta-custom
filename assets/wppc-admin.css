@@ -494,3 +494,47 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   WordPress Notices Override
+   ========================================================================== */
+.notice,
+.notice-success,
+.notice-error {
+    background: var(--wppc-bg-white) !important;
+    border: 1px solid var(--wppc-border-light) !important;
+    border-left: 4px solid var(--wppc-border-dark) !important;
+    border-radius: var(--wppc-border-radius) !important;
+    box-shadow: none !important;
+    padding: 12px 16px !important;
+    margin: 15px 0 5px 0 !important;
+    font-family: var(--wppc-font-family) !important;
+    font-size: var(--wppc-font-size-base) !important;
+    color: var(--wppc-text-dark) !important;
+}
+
+.notice-error {
+    border-left-color: #b91c1c !important;
+}
+
+.notice p {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.notice.is-dismissible .notice-dismiss {
+    box-shadow: none !important;
+    text-decoration: none !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    right: 10px !important;
+}
+
+.notice.is-dismissible .notice-dismiss::before {
+    font-size: 16px !important;
+    color: var(--wppc-text-gray) !important;
+}
+
+.notice.is-dismissible .notice-dismiss:hover::before {
+    color: var(--wppc-text-dark) !important;
+}
