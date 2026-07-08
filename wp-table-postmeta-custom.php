@@ -939,10 +939,14 @@ function wppc_import_rows_from_csv_file($tmp_path)
     return $rows;
 }
 
-function wppc_import_rows_into_table($slug, $rows)
+function wppc_import_rows_into_table($slug, $rows, $target_type = 'custom')
 {
     global $wpdb;
-    $table_name = wppc_get_table_name($slug);
+    if ($target_type === 'main') {
+        $table_name = $wpdb->postmeta;
+    } else {
+        $table_name = wppc_get_table_name($slug);
+    }
     $inserted = 0;
     $skipped = 0;
 
@@ -973,20 +977,36 @@ function wppc_import_rows_into_table($slug, $rows)
     return array('inserted' => $inserted, 'skipped' => $skipped);
 }
 
-function wppc_stream_export_table_data($slug, $format)
+function wppc_stream_export_table_data($slug, $format, $source_type = 'custom', $keys = array())
 {
     global $wpdb;
-    if (!wppc_table_exists($slug)) {
-        wp_die(esc_html__('ไม่พบตารางที่เลือก', 'wp-table-postmeta-custom'));
+    if ($source_type === 'main') {
+        $table_name = $wpdb->postmeta;
+    } else {
+        if (!wppc_table_exists($slug)) {
+            wp_die(esc_html__('ไม่พบตารางที่เลือก', 'wp-table-postmeta-custom'));
+        }
+        $table_name = wppc_get_table_name($slug);
     }
 
-    $table_name = wppc_get_table_name($slug);
     $table_sql = wppc_escape_identifier($table_name);
-    $rows = $wpdb->get_results(
-        "SELECT meta_id, post_id, meta_key, meta_value FROM {$table_sql} ORDER BY meta_id ASC",
-        ARRAY_A
-    );
-    $filename = 'wppc-' . $slug . '-' . gmdate('Ymd-His');
+    
+    $where_sql = '';
+    $where_values = array();
+    if (!empty($keys) && is_array($keys)) {
+        $placeholders = implode(',', array_fill(0, count($keys), '%s'));
+        $where_sql = " WHERE meta_key IN ({$placeholders})";
+        $where_values = $keys;
+    }
+
+    $sql = "SELECT meta_id, post_id, meta_key, meta_value FROM {$table_sql}{$where_sql} ORDER BY meta_id ASC";
+    if (!empty($where_values)) {
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $where_values), ARRAY_A);
+    } else {
+        $rows = $wpdb->get_results($sql, ARRAY_A);
+    }
+
+    $filename = 'wppc-' . ($source_type === 'main' ? 'wp_postmeta' : $slug) . '-' . gmdate('Ymd-His');
 
     if ($format === 'json') {
         nocache_headers();
@@ -1016,65 +1036,6 @@ function wppc_stream_export_table_data($slug, $format)
     exit;
 }
 
-function wppc_get_all_sync_states()
-{
-    $states = get_option(WPPC_SYNC_STATE_OPTION, array());
-    return is_array($states) ? $states : array();
-}
-
-function wppc_get_sync_state($slug)
-{
-    $default = array(
-        'running' => false,
-        'direction' => 'from_main',
-        'cursor' => 0,
-        'batch_size' => 200,
-        'copied' => 0,
-        'skipped' => 0,
-        'updated_at' => '',
-        'last_message' => '',
-        'keys' => array(),
-    );
-
-    $slug = wppc_normalize_slug($slug);
-    if ($slug === '') {
-        return $default;
-    }
-
-    $states = wppc_get_all_sync_states();
-    if (!isset($states[$slug]) || !is_array($states[$slug])) {
-        return $default;
-    }
-
-    return array_merge($default, $states[$slug]);
-}
-
-function wppc_set_sync_state($slug, $state)
-{
-    $slug = wppc_normalize_slug($slug);
-    if ($slug === '') {
-        return;
-    }
-
-    $states = wppc_get_all_sync_states();
-    $states[$slug] = array_merge(wppc_get_sync_state($slug), (array) $state);
-    $states[$slug]['updated_at'] = current_time('mysql');
-    update_option(WPPC_SYNC_STATE_OPTION, $states, false);
-}
-
-function wppc_reset_sync_state($slug)
-{
-    wppc_set_sync_state($slug, array(
-        'running' => false,
-        'direction' => 'from_main',
-        'cursor' => 0,
-        'batch_size' => 200,
-        'copied' => 0,
-        'skipped' => 0,
-        'keys' => array(),
-        'last_message' => '',
-    ));
-}
 
 function wppc_upsert_meta_row($table_name, $post_id, $meta_key, $meta_value)
 {
@@ -1110,101 +1071,6 @@ function wppc_upsert_meta_row($table_name, $post_id, $meta_key, $meta_value)
     );
 }
 
-function wppc_run_sync_batch($slug)
-{
-    global $wpdb;
-    $slug = wppc_normalize_slug($slug);
-    if ($slug === '') {
-        return new WP_Error('invalid_slug', 'รหัสตารางไม่ถูกต้อง');
-    }
-    if (!wppc_table_exists($slug)) {
-        return new WP_Error('missing_table', 'ไม่พบตารางที่เลือก');
-    }
-
-    $state = wppc_get_sync_state($slug);
-    if (empty($state['running'])) {
-        return new WP_Error('sync_not_running', 'สถานะซิงก์ไม่ได้อยู่ในโหมดทำงาน');
-    }
-
-    $direction = $state['direction'] === 'to_main' ? 'to_main' : 'from_main';
-    $cursor = absint($state['cursor']);
-    $batch_size = wppc_clamp_batch_size($state['batch_size']);
-    $copied = absint($state['copied']);
-    $skipped = absint($state['skipped']);
-
-    if ($direction === 'from_main') {
-        $source_table = $wpdb->postmeta;
-        $target_table = wppc_get_table_name($slug);
-    } else {
-        $source_table = wppc_get_table_name($slug);
-        $target_table = $wpdb->postmeta;
-    }
-    $source_table_sql = wppc_escape_identifier($source_table);
-
-    $keys_filter = '';
-    $where_values = array($cursor);
-    if (!empty($state['keys']) && is_array($state['keys'])) {
-        $placeholders = implode(',', array_fill(0, count($state['keys']), '%s'));
-        $keys_filter = " AND meta_key IN ({$placeholders})";
-        $where_values = array_merge($where_values, $state['keys']);
-    }
-    $where_values[] = $batch_size;
-
-    $rows = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT meta_id, post_id, meta_key, meta_value FROM {$source_table_sql} WHERE meta_id > %d{$keys_filter} ORDER BY meta_id ASC LIMIT %d",
-            $where_values
-        ),
-        ARRAY_A
-    );
-
-    if (empty($rows)) {
-        wppc_set_sync_state($slug, array(
-            'running' => false,
-            'last_message' => 'ซิงก์เสร็จสิ้นแล้ว',
-        ));
-        return array('copied' => 0, 'skipped' => 0, 'done' => true);
-    }
-
-    $batch_copied = 0;
-    $batch_skipped = 0;
-    $last_id = $cursor;
-    foreach ($rows as $row) {
-        $last_id = absint($row['meta_id']);
-        $post_id = absint($row['post_id']);
-        $meta_key = wppc_normalize_meta_key($row['meta_key']);
-        $meta_value = isset($row['meta_value']) ? $row['meta_value'] : '';
-        if ($post_id <= 0 || $meta_key === '') {
-            $batch_skipped++;
-            continue;
-        }
-
-        $target_value = wppc_prepare_meta_value_for_store($meta_value);
-        $result = wppc_upsert_meta_row($target_table, $post_id, $meta_key, $target_value);
-        if ($result) {
-            $batch_copied++;
-        } else {
-            $batch_skipped++;
-        }
-    }
-
-    $copied += $batch_copied;
-    $skipped += $batch_skipped;
-    $done = count($rows) < $batch_size;
-    wppc_set_sync_state($slug, array(
-        'cursor' => $last_id,
-        'copied' => $copied,
-        'skipped' => $skipped,
-        'running' => !$done,
-        'last_message' => $done ? 'ซิงก์เสร็จสิ้นแล้ว' : 'ซิงก์ต่อได้อีก',
-    ));
-
-    return array(
-        'copied' => $batch_copied,
-        'skipped' => $batch_skipped,
-        'done' => $done,
-    );
-}
 
 function wppc_handle_admin_actions()
 {
@@ -1357,7 +1223,8 @@ function wppc_handle_admin_actions()
             if (!in_array($slug, $slugs, true)) {
                 wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
             }
-            if (!wppc_table_exists($slug)) {
+            $target_type = isset($_POST['import_target']) && wp_unslash($_POST['import_target']) === 'main' ? 'main' : 'custom';
+            if ($target_type === 'custom' && !wppc_table_exists($slug)) {
                 $created = wppc_create_meta_table($slug);
                 if (is_wp_error($created)) {
                     wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $created->get_error_message(), array('table' => $slug));
@@ -1385,85 +1252,39 @@ function wppc_handle_admin_actions()
                 wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $rows->get_error_message(), array('table' => $slug));
             }
 
-            $result = wppc_import_rows_into_table($slug, $rows);
+            $result = wppc_import_rows_into_table($slug, $rows, $target_type);
             $message = sprintf('นำเข้าข้อมูลเสร็จแล้ว: สำเร็จ %d รายการ, ข้าม %d รายการ', $result['inserted'], $result['skipped']);
             wppc_admin_redirect_with_notice('wppc-data-manager', 'success', $message, array('table' => $slug));
             break;
 
         case 'export_data':
-            $format = isset($_GET['format']) ? sanitize_key(wp_unslash($_GET['format'])) : '';
+            $format = isset($_REQUEST['format']) ? sanitize_key(wp_unslash($_REQUEST['format'])) : '';
             if (!in_array($format, array('json', 'csv'), true)) {
                 wp_die(esc_html__('รูปแบบไฟล์ส่งออกไม่ถูกต้อง', 'wp-table-postmeta-custom'));
             }
-            check_admin_referer('wppc_export_data_' . $format);
-            $slug = isset($_GET['table']) ? wppc_normalize_slug(wp_unslash($_GET['table'])) : $slug;
+            check_admin_referer('wppc_export_data');
+            $slug = isset($_REQUEST['table']) ? wppc_normalize_slug(wp_unslash($_REQUEST['table'])) : $slug;
             if (!in_array($slug, $slugs, true)) {
                 wp_die(esc_html__('ไม่พบตารางที่เลือก', 'wp-table-postmeta-custom'));
             }
-            wppc_stream_export_table_data($slug, $format);
-            break;
 
-        case 'sync_start':
-            check_admin_referer('wppc_sync_start');
-            $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
-            if (!in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
-            }
-            $direction = isset($_POST['sync_direction']) && wp_unslash($_POST['sync_direction']) === 'to_main' ? 'to_main' : 'from_main';
-            $batch_size = isset($_POST['sync_batch_size']) ? wppc_clamp_batch_size($_POST['sync_batch_size']) : 200;
-            $sync_keys_raw = isset($_POST['sync_keys']) ? sanitize_text_field(wp_unslash($_POST['sync_keys'])) : '';
-            $sync_keys = array();
-            if ($sync_keys_raw !== '') {
-                $parts = explode(',', $sync_keys_raw);
+            $source_type = isset($_REQUEST['export_source']) && wp_unslash($_REQUEST['export_source']) === 'main' ? 'main' : 'custom';
+            $export_keys_raw = isset($_REQUEST['export_keys']) ? sanitize_text_field(wp_unslash($_REQUEST['export_keys'])) : '';
+            $keys = array();
+            if ($export_keys_raw !== '') {
+                $parts = explode(',', $export_keys_raw);
                 foreach ($parts as $part) {
                     $key = wppc_normalize_meta_key($part);
                     if ($key !== '') {
-                        $sync_keys[] = $key;
+                        $keys[] = $key;
                     }
                 }
             }
 
-            wppc_set_sync_state($slug, array(
-                'running' => true,
-                'direction' => $direction,
-                'cursor' => 0,
-                'batch_size' => $batch_size,
-                'copied' => 0,
-                'skipped' => 0,
-                'keys' => $sync_keys,
-                'last_message' => 'เริ่มซิงก์แล้ว',
-            ));
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'เริ่มซิงก์เรียบร้อย', array('table' => $slug));
+            wppc_stream_export_table_data($slug, $format, $source_type, $keys);
             break;
 
-        case 'sync_run_batch':
-            check_admin_referer('wppc_sync_run_batch');
-            $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
-            if (!in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
-            }
-            $result = wppc_run_sync_batch($slug);
-            if (is_wp_error($result)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $result->get_error_message(), array('table' => $slug));
-            }
-            $message = sprintf(
-                'ซิงก์ 1 รอบ: คัดลอก %d, ข้าม %d%s',
-                $result['copied'],
-                $result['skipped'],
-                !empty($result['done']) ? ' (เสร็จสิ้น)' : ''
-            );
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', $message, array('table' => $slug));
-            break;
 
-        case 'sync_reset':
-            check_admin_referer('wppc_sync_reset');
-            $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
-            if (!in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
-            }
-            wppc_reset_sync_state($slug);
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'รีเซ็ตสถานะซิงก์เรียบร้อย', array('table' => $slug));
-            break;
     }
 }
 add_action('admin_init', 'wppc_handle_admin_actions');
@@ -1714,85 +1535,75 @@ function wppc_render_data_manager_page()
     echo '</div>';
     echo '</div>';
 
-    echo '<div class="wppc-grid">';
     echo '<div class="wppc-card">';
     echo '<h2>นำเข้า/ส่งออกข้อมูล</h2>';
-    echo '<p><a class="button" href="' . esc_url($export_json_url) . '">ส่งออก JSON</a> <a class="button" href="' . esc_url($export_csv_url) . '">ส่งออก CSV</a></p>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" enctype="multipart/form-data">';
+    echo '<div class="wppc-impexp-container">';
+
+    // Column 1: Export Controls
+    echo '<div class="wppc-impexp-column">';
+    echo '<h3>ส่งออกข้อมูล (Export)</h3>';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-sync-form-group">';
+    wp_nonce_field('wppc_export_data');
+    echo '<input type="hidden" name="page" value="wppc-data-manager">';
+    echo '<input type="hidden" name="wppc_action" value="export_data">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+
+    echo '<div class="wppc-form-row">';
+    echo '<label>ตารางต้นทาง:</label>';
+    echo '<select name="export_source"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>รูปแบบไฟล์:</label>';
+    echo '<select name="format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>คีย์ข้อมูล:</label>';
+    echo '<input type="text" name="export_keys" placeholder="เช่น price, stock (ว่างเพื่อส่งออกทั้งหมด)" style="width:220px;"> ';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
+    echo '<button type="submit" class="button button-primary">ส่งออกไฟล์</button>';
+    echo '</div>';
+    echo '</form>';
+    echo '</div>'; // wppc-impexp-column (Export)
+
+    // Column 2: Import Controls
+    echo '<div class="wppc-impexp-column">';
+    echo '<h3>นำเข้าข้อมูล (Import)</h3>';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" enctype="multipart/form-data" class="wppc-sync-form-group">';
     wp_nonce_field('wppc_import_data');
     echo '<input type="hidden" name="page" value="wppc-data-manager">';
     echo '<input type="hidden" name="wppc_action" value="import_data">';
     echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<p><label>รูปแบบไฟล์: <select name="import_format"><option value="json">JSON</option><option value="csv">CSV</option></select></label></p>';
-    echo '<p><input type="file" name="import_file" accept=".json,.csv" required></p>';
-    echo '<p><button type="submit" class="button button-primary">นำเข้าข้อมูล</button></p>';
-    echo '</form>';
-    echo '<p class="description">ขนาดไฟล์สูงสุด 10MB และต้องมีคอลัมน์ `post_id`, `meta_key`, `meta_value`</p>';
-    echo '</div>';
-    echo '</div>';
 
-    echo '<div class="wppc-card">';
-    echo '<h2>ซิงก์ข้อมูลกับ wp_postmeta</h2>';
-    echo '<div class="wppc-sync-container">';
-    
-    // Column 1: Status
-    echo '<div class="wppc-sync-status-section">';
-    echo '<h3>สถานะการซิงก์ปัจจุบัน</h3>';
-    echo '<table class="wppc-sync-status-table">';
-    echo '<tr><th>สถานะ</th><td><span class="wppc-status-badge ' . (!empty($sync_state['running']) ? 'is-running' : 'is-stopped') . '">' . esc_html(!empty($sync_state['running']) ? 'กำลังทำงาน' : 'หยุดอยู่') . '</span></td></tr>';
-    echo '<tr><th>ทิศทาง</th><td><code>' . esc_html($sync_state['direction'] === 'to_main' ? 'ตารางย่อย -> wp_postmeta' : 'wp_postmeta -> ตารางย่อย') . '</code></td></tr>';
-    echo '<tr><th>Cursor (meta_id)</th><td><code>' . esc_html((string) $sync_state['cursor']) . '</code></td></tr>';
-    echo '<tr><th>สำเร็จ / ข้าม</th><td><strong>' . esc_html((string) $sync_state['copied']) . '</strong> / <span class="wppc-faded">' . esc_html((string) $sync_state['skipped']) . '</span></td></tr>';
-    if (!empty($sync_state['last_message'])) {
-        echo '<tr><th>ข้อความล่าสุด</th><td><span class="wppc-sync-message">' . esc_html($sync_state['last_message']) . '</span></td></tr>';
-    }
-    echo '</table>';
-    echo '</div>';
-
-    // Column 2: Controls
-    echo '<div class="wppc-sync-controls-section">';
-    echo '<h3>การควบคุมและการตั้งค่า</h3>';
-    
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-sync-form-group">';
-    wp_nonce_field('wppc_sync_start');
-    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_start"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    
     echo '<div class="wppc-form-row">';
-    echo '<label>ทิศทาง:</label>';
-    echo '<select name="sync_direction"><option value="from_main" ' . selected($sync_state['direction'], 'from_main', false) . '>wp_postmeta -> ตารางย่อย</option><option value="to_main" ' . selected($sync_state['direction'], 'to_main', false) . '>ตารางย่อย -> wp_postmeta</option></select>';
-    echo '</div>';
-    
-    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>ขนาด Batch:</label>';
-    echo '<input type="number" name="sync_batch_size" min="10" max="1000" value="' . esc_attr($sync_state['batch_size']) . '" style="width:90px;"> ';
+    echo '<label>ตารางปลายทาง:</label>';
+    echo '<select name="import_target"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
     echo '</div>';
 
-    $keys_val = !empty($sync_state['keys']) && is_array($sync_state['keys']) ? implode(', ', $sync_state['keys']) : '';
     echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>คีย์ข้อมูล:</label>';
-    echo '<input type="text" name="sync_keys" value="' . esc_attr($keys_val) . '" placeholder="เช่น price, stock (เว้นว่างเพื่อซิงก์ทั้งหมด)" style="width:220px;"> ';
+    echo '<label>รูปแบบไฟล์:</label>';
+    echo '<select name="import_format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
     echo '</div>';
-    
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>เลือกไฟล์:</label>';
+    echo '<input type="file" name="import_file" accept=".json,.csv" required style="max-width:220px;">';
+    echo '</div>';
+
     echo '<div class="wppc-form-row" style="margin-top: 12px;">';
-    echo '<button type="submit" class="button button-primary">เริ่มการซิงก์</button>';
+    echo '<button type="submit" class="button button-primary">นำเข้าไฟล์</button>';
     echo '</div>';
     echo '</form>';
-    
-    echo '<div class="wppc-sync-actions-group">';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-inline-form">';
-    wp_nonce_field('wppc_sync_run_batch');
-    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_run_batch"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button" ' . (empty($sync_state['running']) ? 'disabled' : '') . '>รันซิงก์ 1 รอบ</button></form> ';
+    echo '<p class="description" style="margin-top:10px;">ขนาดไฟล์สูงสุด 10MB คอลัมน์ต้องมี `post_id`, `meta_key`, `meta_value`</p>';
+    echo '</div>'; // wppc-impexp-column (Import)
 
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-inline-form">';
-    wp_nonce_field('wppc_sync_reset');
-    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="sync_reset"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button button-link-delete">รีเซ็ตสถานะ</button></form>';
-    echo '</div>';
-    
-    echo '</div>'; // wppc-sync-controls-section
-    echo '</div>'; // wppc-sync-container
-    echo '</div>';
+    echo '</div>'; // wppc-impexp-container
+    echo '</div>'; // wppc-card
+
+
 
     echo '<div class="wppc-card">';
     echo '<h2>ข้อมูลในตาราง</h2>';
