@@ -363,7 +363,7 @@ jQuery(document).ready(function($) {
         });
 
         // Delete Record Hook
-        $dataContainer.on('click', '.button-link-delete', function(e) {
+        $dataContainer.on('click', 'tbody .button-link-delete', function(e) {
             e.preventDefault();
             if (!confirm('ยืนยันการลบข้อมูลนี้?')) {
                 return;
