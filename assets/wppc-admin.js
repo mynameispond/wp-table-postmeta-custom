@@ -21,7 +21,7 @@ jQuery(document).ready(function($) {
         $card.addClass('wppc-loading-relative');
         $loadingOverlay = $('<div class="wppc-loading-overlay"><div class="wppc-spinner"></div></div>');
         $card.append($loadingOverlay);
-        $('.wppc-admin-wrap button, .wppc-admin-wrap input[type="submit"]').prop('disabled', true);
+        $('.wppc-admin-wrap button, .wppc-admin-wrap input[type="submit"], #new_table_slug').prop('disabled', true);
     }
 
     function hideLoading() {
@@ -30,7 +30,7 @@ jQuery(document).ready(function($) {
             $loadingOverlay = null;
         }
         $card.removeClass('wppc-loading-relative');
-        $('.wppc-admin-wrap button, .wppc-admin-wrap input[type="submit"]').prop('disabled', false);
+        $('.wppc-admin-wrap button, .wppc-admin-wrap input[type="submit"], #new_table_slug').prop('disabled', false);
     }
 
     // Helper to show notice
@@ -84,7 +84,7 @@ jQuery(document).ready(function($) {
                 showNotice('success', response.data.message);
             } else {
                 // Show error notice
-                showNotice('error', response.data.message || 'เกิดข้อผิดพลาดในการสร้างตาราง');
+                showNotice('error', (response.data && response.data.message) || 'เกิดข้อผิดพลาดในการสร้างตาราง');
             }
         })
         .fail(function(xhr) {
@@ -128,7 +128,7 @@ jQuery(document).ready(function($) {
                 showNotice('success', response.data.message);
             } else {
                 // Show error notice
-                showNotice('error', response.data.message || 'เกิดข้อผิดพลาดในการลบตาราง');
+                showNotice('error', (response.data && response.data.message) || 'เกิดข้อผิดพลาดในการลบตาราง');
             }
         })
         .fail(function(xhr) {
