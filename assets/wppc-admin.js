@@ -487,4 +487,49 @@ jQuery(document).ready(function($) {
             });
         });
     }
+
+    // ==========================================
+    // 3. Import AJAX Handling
+    // ==========================================
+    if ($('.wppc-import-form').length > 0) {
+        $('.wppc-import-form').on('submit', function(e) {
+            e.preventDefault();
+            var $form = $(this);
+            var $card = $form.closest('.wppc-impexp-column');
+
+            showLoading($card);
+
+            var formData = new FormData(this);
+            formData.append('action', 'wppc_import_data');
+            formData.append('nonce', wppc_params.nonces.import_data);
+
+            $.ajax({
+                url: wppc_params.ajax_url,
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                cache: false
+            })
+            .done(function(response) {
+                if (response.success) {
+                    showNotice('success', response.data.message);
+                    $form.find('input[type="file"]').val('');
+                } else {
+                    var errorMsg = (response.data && response.data.message) || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล';
+                    showNotice('error', errorMsg);
+                }
+            })
+            .fail(function(xhr) {
+                var errorMsg = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+                if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                    errorMsg = xhr.responseJSON.data.message;
+                }
+                showNotice('error', errorMsg);
+            })
+            .always(function() {
+                hideLoading($card);
+            });
+        });
+    }
 });

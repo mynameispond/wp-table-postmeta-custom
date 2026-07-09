@@ -334,7 +334,7 @@ function wppc_render_import_export_page()
     // Column 2: Import Controls
     echo '<div class="wppc-impexp-column">';
     echo '<h3>นำเข้าข้อมูล (Import)</h3>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-import-export')) . '" enctype="multipart/form-data" class="wppc-sync-form-group">';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-import-export')) . '" enctype="multipart/form-data" class="wppc-sync-form-group wppc-import-form">';
     wp_nonce_field('wppc_import_data');
     echo '<input type="hidden" name="page" value="wppc-import-export">';
     echo '<input type="hidden" name="wppc_action" value="import_data">';

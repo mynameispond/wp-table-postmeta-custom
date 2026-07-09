@@ -278,3 +278,57 @@ function wppc_ajax_truncate_table() {
 }
 add_action('wp_ajax_wppc_ajax_truncate_table', 'wppc_ajax_truncate_table');
 
+/**
+ * AJAX callback to import CSV/JSON data.
+ */
+function wppc_ajax_import_data() {
+    wppc_verify_ajax_request('wppc_import_data');
+
+    $slugs = wppc_get_registered_slugs();
+    $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : '';
+    if (!in_array($slug, $slugs, true)) {
+        wp_send_json_error(array('message' => 'ไม่พบตารางที่เลือก'));
+    }
+
+    $target_type = isset($_POST['import_target']) && wp_unslash($_POST['import_target']) === 'main' ? 'main' : 'custom';
+    if ($target_type === 'custom' && !wppc_table_exists($slug)) {
+        $created = wppc_create_meta_table($slug);
+        if (is_wp_error($created)) {
+            wp_send_json_error(array('message' => $created->get_error_message()));
+        }
+    }
+
+    $format = isset($_POST['import_format']) ? sanitize_key(wp_unslash($_POST['import_format'])) : '';
+    if (!in_array($format, array('json', 'csv'), true)) {
+        wp_send_json_error(array('message' => 'รูปแบบไฟล์นำเข้าไม่ถูกต้อง'));
+    }
+
+    if (empty($_FILES['import_file']) || !isset($_FILES['import_file']['tmp_name']) || !is_uploaded_file($_FILES['import_file']['tmp_name'])) {
+        wp_send_json_error(array('message' => 'ไฟล์อัปโหลดไม่ถูกต้อง'));
+    }
+
+    $file = $_FILES['import_file'];
+    if (!empty($file['error'])) {
+        wp_send_json_error(array('message' => 'อัปโหลดไฟล์ไม่สำเร็จ'));
+    }
+
+    if (!empty($file['size']) && $file['size'] > 10 * 1024 * 1024) {
+        wp_send_json_error(array('message' => 'ไฟล์ใหญ่เกิน 10MB'));
+    }
+
+    $rows = $format === 'json'
+        ? wppc_import_rows_from_json_file($file['tmp_name'])
+        : wppc_import_rows_from_csv_file($file['tmp_name']);
+
+    if (is_wp_error($rows)) {
+        wp_send_json_error(array('message' => $rows->get_error_message()));
+    }
+
+    $result = wppc_import_rows_into_table($slug, $rows, $target_type);
+
+    wp_send_json_success(array(
+        'message' => sprintf('นำเข้าข้อมูลเรียบร้อย %d รายการ, ข้าม %d รายการ', $result['inserted'], $result['skipped'])
+    ));
+}
+add_action('wp_ajax_wppc_import_data', 'wppc_ajax_import_data');
+
