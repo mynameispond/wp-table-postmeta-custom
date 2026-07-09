@@ -15,14 +15,12 @@ define('WPPC_VERSION', '1.0.0');
 define('WPPC_TABLE_REGISTRY_OPTION', 'wppc_table_registry');
 define('WPPC_SYNC_STATE_OPTION', 'wppc_sync_state');
 
-/**
- * ตรวจสอบ slug ให้ปลอดภัยกับชื่อตาราง
- */
-
 require_once plugin_dir_path(__FILE__) . 'includes/db-helpers.php';
 require_once plugin_dir_path(__FILE__) . 'includes/admin-views.php';
 
 add_filter('posts_where', 'wppc_filter_posts_where_for_meta_query_wppc', 10, 2);
+add_action('admin_notices', 'wppc_render_admin_notice');
+add_action('admin_enqueue_scripts', 'wppc_enqueue_admin_assets');
 
 
 

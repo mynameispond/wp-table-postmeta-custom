@@ -48,7 +48,7 @@ function wppc_render_admin_notice()
     $class = $notice === 'error' ? 'notice notice-error' : 'notice notice-success is-dismissible';
     echo '<div class="' . esc_attr($class) . '"><p>' . esc_html($message) . '</p></div>';
 }
-add_action('admin_notices', 'wppc_render_admin_notice');
+
 
 function wppc_get_admin_active_slug()
 {
@@ -87,7 +87,6 @@ function wppc_enqueue_admin_assets()
         WPPC_VERSION
     );
 }
-add_action('admin_enqueue_scripts', 'wppc_enqueue_admin_assets');
 
 function wppc_render_admin_view_tabs($active_page)
 {
