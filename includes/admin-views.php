@@ -82,7 +82,7 @@ function wppc_enqueue_admin_assets()
 
     wp_enqueue_style(
         'wppc-admin-css',
-        plugin_dir_url(__FILE__) . 'assets/wppc-admin.css',
+        plugin_dir_url(dirname(__FILE__)) . 'assets/wppc-admin.css',
         array(),
         WPPC_VERSION
     );
