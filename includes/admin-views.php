@@ -262,7 +262,7 @@ function wppc_render_data_manager_page()
     echo '</tbody></table>';
     submit_button($edit_row ? 'อัปเดตข้อมูล' : 'เพิ่มข้อมูล');
     if ($edit_row) {
-        echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ยกเลิกแก้ไข</a>';
+        echo '<a class="button wppc-cancel-edit" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ยกเลิกแก้ไข</a>';
     }
     echo '</form>';
     echo '</div>';
@@ -447,7 +447,7 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
             echo '<td>' . esc_html($row['post_id']) . '</td>';
             echo '<td><code>' . esc_html($row['meta_key']) . '</code></td>';
             echo '<td><code>' . esc_html($row_value) . '</code></td>';
-            echo '<td><a class="button button-small" href="' . esc_url($edit_url) . '">แก้ไข</a> ';
+            echo '<td><a class="button button-small wppc-edit-record" href="' . esc_url($edit_url) . '" data-id="' . esc_attr($row['meta_id']) . '">แก้ไข</a> ';
             echo '<button type="button" class="button button-small button-link-delete" onclick="if(confirm(\'ยืนยันการลบข้อมูลนี้?\')) { var f=document.getElementById(\'wppc-del-' . esc_attr($row['meta_id']) . '\'); f.submit(); }">ลบ</button></td>';
             echo '</tr>';
         }
@@ -475,8 +475,9 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
                 'filter_meta_value' => $meta_value_filter,
                 'paged' => $i,
             ));
-            $style = $i === $paged ? 'style="font-weight:700;text-decoration:underline;"' : '';
-            echo '<a ' . $style . ' href="' . esc_url($page_url) . '">' . esc_html($i) . '</a> ';
+            $class_attr = $i === $paged ? ' class="current"' : '';
+            $style = $i === $paged ? ' style="font-weight:700;text-decoration:underline;"' : '';
+            echo '<a' . $class_attr . $style . ' href="' . esc_url($page_url) . '">' . esc_html($i) . '</a> ';
         }
         echo '</div></div>';
     }

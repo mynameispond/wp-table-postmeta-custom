@@ -1,19 +1,15 @@
 jQuery(document).ready(function($) {
     // Helper to show/hide loading
-    var $loadingOverlay = null;
-
     function showLoading($card) {
         $card.addClass('wppc-loading-relative');
-        $loadingOverlay = $('<div class="wppc-loading-overlay"><div class="wppc-spinner"></div></div>');
+        $card.find('.wppc-loading-overlay').remove(); // safeguard
+        var $loadingOverlay = $('<div class="wppc-loading-overlay"><div class="wppc-spinner"></div></div>');
         $card.append($loadingOverlay);
         $('.wppc-admin-wrap button, .wppc-admin-wrap input, .wppc-admin-wrap textarea, .wppc-admin-wrap select').prop('disabled', true);
     }
 
     function hideLoading($card) {
-        if ($loadingOverlay) {
-            $loadingOverlay.remove();
-            $loadingOverlay = null;
-        }
+        $card.find('.wppc-loading-overlay').remove();
         $card.removeClass('wppc-loading-relative');
         $('.wppc-admin-wrap button, .wppc-admin-wrap input, .wppc-admin-wrap textarea, .wppc-admin-wrap select').prop('disabled', false);
     }
@@ -237,15 +233,13 @@ jQuery(document).ready(function($) {
         });
 
         // Edit Record Hook (delegated on #wppc-data-table-container)
-        $dataContainer.on('click', 'a.button-small:contains("แก้ไข")', function(e) {
+        $dataContainer.on('click', 'a.wppc-edit-record', function(e) {
             e.preventDefault();
-            var href = $(this).attr('href');
-            var match = href.match(/[?&]edit_id=(\d+)/);
-            var editId = match ? parseInt(match[1], 10) : 0;
+            var editId = $(this).data('id') || 0;
             if (editId <= 0) {
                 return;
             }
-
+            var href = $(this).attr('href');
             var tableMatch = href.match(/[?&]table=([^&]+)/);
             var table = tableMatch ? tableMatch[1] : (wppc_params.active_slug || '');
 
@@ -270,14 +264,8 @@ jQuery(document).ready(function($) {
                     // Show or create cancel edit button
                     var $cancelBtn = $form.find('.wppc-cancel-edit');
                     if ($cancelBtn.length === 0) {
-                        var $existingA = $form.find('a:contains("ยกเลิกแก้ไข")');
-                        if ($existingA.length > 0) {
-                            $existingA.addClass('wppc-cancel-edit');
-                            $cancelBtn = $existingA;
-                        } else {
-                            $cancelBtn = $('<button type="button" class="button wppc-cancel-edit" style="margin-left: 8px;">ยกเลิกแก้ไข</button>');
-                            $form.find('input[type="submit"]').after($cancelBtn);
-                        }
+                        $cancelBtn = $('<button type="button" class="button wppc-cancel-edit" style="margin-left: 8px;">ยกเลิกแก้ไข</button>');
+                        $form.find('input[type="submit"]').after($cancelBtn);
                     }
                     $cancelBtn.show();
 
@@ -298,7 +286,7 @@ jQuery(document).ready(function($) {
         });
 
         // Cancel Edit Hook
-        $form.on('click', '.wppc-cancel-edit, a:contains("ยกเลิกแก้ไข")', function(e) {
+        $form.on('click', '.wppc-cancel-edit', function(e) {
             e.preventDefault();
             $form.find('#wppc_post_id').val('');
             $form.find('#wppc_meta_key').val('');
@@ -306,7 +294,6 @@ jQuery(document).ready(function($) {
             $form.find('input[name="meta_id"]').val('0');
             $form.find('input[type="submit"]').val('เพิ่มข้อมูล');
             $form.find('.wppc-cancel-edit').hide();
-            $form.find('a:contains("ยกเลิกแก้ไข")').hide();
         });
 
         // Save Form Hook
@@ -388,7 +375,7 @@ jQuery(document).ready(function($) {
                     var filterPostId = $dataContainer.find('input[name="filter_post_id"]').val() || '';
                     var filterMetaKey = $dataContainer.find('input[name="filter_meta_key"]').val() || '';
                     var filterMetaValue = $dataContainer.find('input[name="filter_meta_value"]').val() || '';
-                    var activePageMatch = $dataContainer.find('.tablenav-pages a[style*="underline"]').first();
+                    var activePageMatch = $dataContainer.find('.tablenav-pages a.current').first();
                     var pagedVal = activePageMatch.length > 0 ? parseInt(activePageMatch.text(), 10) : 1;
                     fetchTable({
                         action: 'wppc_get_data_table',
