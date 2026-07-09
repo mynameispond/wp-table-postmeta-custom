@@ -57,6 +57,7 @@ function wppc_enqueue_admin_assets()
             'bulk_delete' => wp_create_nonce('wppc_bulk_delete'),
             'truncate_table' => wp_create_nonce('wppc_truncate_table'),
             'import_data' => wp_create_nonce('wppc_import_data'),
+            'get_data_table' => wp_create_nonce('wppc_get_data_table'),
         )
     ));
 }

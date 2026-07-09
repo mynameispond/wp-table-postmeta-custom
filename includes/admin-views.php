@@ -395,7 +395,7 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
     echo '<input type="hidden" name="page" value="wppc-data-manager">';
     echo '<input type="hidden" name="wppc_action" value="truncate_table">';
     echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง \' . esc_js($slug) . \'? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
+    echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง ' . esc_js($slug) . '? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
     echo '</form>';
     echo '</div>';
 
@@ -406,7 +406,7 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
     echo '<input type="search" name="filter_meta_value" value="' . esc_attr($meta_value_filter) . '" placeholder="meta_value"> ';
     echo '<button type="submit" class="button">ค้นหา</button> ';
     if ($post_id_filter !== '' || $meta_key_filter !== '' || $meta_value_filter !== '') {
-        echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
+        echo '<a class="button wppc-clear-search" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
     }
     echo '</form>';
 

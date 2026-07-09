@@ -150,7 +150,7 @@ jQuery(document).ready(function($) {
         });
 
         function fetchTable(data) {
-            var $tableCard = $dataContainer.closest('.wppc-card');
+            var $tableCard = $dataContainer.find('.wppc-card');
             showLoading($tableCard);
 
             $.get(wppc_params.ajax_url, data)
@@ -180,7 +180,7 @@ jQuery(document).ready(function($) {
 
             fetchTable({
                 action: 'wppc_get_data_table',
-                nonce: wppc_params.nonces.save_record,
+                nonce: wppc_params.nonces.get_data_table,
                 table: table,
                 filter_post_id: filterPostId,
                 filter_meta_key: filterMetaKey,
@@ -203,7 +203,7 @@ jQuery(document).ready(function($) {
 
             fetchTable({
                 action: 'wppc_get_data_table',
-                nonce: wppc_params.nonces.save_record,
+                nonce: wppc_params.nonces.get_data_table,
                 table: table,
                 filter_post_id: filterPostId,
                 filter_meta_key: filterMetaKey,
@@ -213,13 +213,12 @@ jQuery(document).ready(function($) {
         });
 
         // Intercept search form "ล้างคำค้น" link click
-        $dataContainer.on('click', 'form[method="get"] a', function(e) {
-            if ($(this).text().trim() === 'ล้างคำค้น') {
-                e.preventDefault();
-                var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
-                fetchTable({
-                    action: 'wppc_get_data_table',
-                    nonce: wppc_params.nonces.save_record,
+        $dataContainer.on('click', 'form[method="get"] a.wppc-clear-search', function(e) {
+            e.preventDefault();
+            var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+            fetchTable({
+                action: 'wppc_get_data_table',
+                nonce: wppc_params.nonces.get_data_table,
                     table: table,
                     filter_post_id: '',
                     filter_meta_key: '',

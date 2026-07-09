@@ -78,7 +78,7 @@ add_action('wp_ajax_wppc_delete_table', 'wppc_ajax_delete_table');
  * AJAX callback to retrieve the data manager table HTML.
  */
 function wppc_ajax_get_data_table() {
-    wppc_verify_ajax_request('wppc_save_record');
+    wppc_verify_ajax_request('wppc_get_data_table');
 
     $slug = isset($_GET['table']) ? wppc_normalize_slug(wp_unslash($_GET['table'])) : '';
     $post_id = isset($_GET['filter_post_id']) ? sanitize_text_field(wp_unslash($_GET['filter_post_id'])) : '';
