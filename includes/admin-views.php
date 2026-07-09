@@ -136,6 +136,45 @@ function wppc_render_slug_tabs($current_slug, $page)
 }
 
 
+function wppc_render_table_types_table_html()
+{
+    $slugs = wppc_get_registered_slugs();
+    ob_start();
+    echo '<div class="wppc-table-scroll">';
+    echo '<table class="widefat striped">';
+    echo '<thead><tr><th style="width:200px;">รหัสตาราง (slug)</th><th>ชื่อตารางจริง</th><th style="width:140px;">จำนวนข้อมูล</th><th style="width:220px;">การทำงาน</th></tr></thead>';
+    echo '<tbody>';
+    if (empty($slugs)) {
+        echo '<tr><td colspan="4">ยังไม่มีตาราง custom ให้สร้าง slug ก่อนเริ่มจัดการข้อมูล</td></tr>';
+    } else {
+        foreach ($slugs as $slug) {
+            $table_name = wppc_get_table_name($slug);
+            $count = wppc_get_table_row_count($slug);
+            echo '<tr>';
+            echo '<td><strong>' . esc_html($slug) . '</strong></td>';
+            echo '<td><code>' . esc_html($table_name) . '</code></td>';
+            echo '<td>' . esc_html(number_format_i18n($count)) . '</td>';
+            echo '<td>';
+            echo '<div class="wppc-inline-actions">';
+            echo '<a class="button button-small" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">จัดการข้อมูล</a> ';
+            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-table-types')) . '" class="wppc-inline-form">';
+            wp_nonce_field('wppc_delete_table');
+            echo '<input type="hidden" name="page" value="wppc-table-types">';
+            echo '<input type="hidden" name="wppc_action" value="delete_table">';
+            echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+            echo '<button type="submit" class="button button-small button-link-delete" onclick="return confirm(\'ยืนยันการลบตารางและข้อมูลทั้งหมด?\');">ลบตาราง</button>';
+            echo '</form>';
+            echo '</div>';
+            echo '</td>';
+            echo '</tr>';
+        }
+    }
+    echo '</tbody>';
+    echo '</table>';
+    echo '</div>';
+    return ob_get_clean();
+}
+
 function wppc_render_table_types_page()
 {
     if (!current_user_can('manage_options')) {
@@ -170,37 +209,8 @@ function wppc_render_table_types_page()
 
     echo '<div class="wppc-card">';
     echo '<h2>ตารางที่มีอยู่</h2>';
-    echo '<div class="wppc-table-scroll">';
-    echo '<table class="widefat striped">';
-    echo '<thead><tr><th style="width:200px;">รหัสตาราง (slug)</th><th>ชื่อตารางจริง</th><th style="width:140px;">จำนวนข้อมูล</th><th style="width:220px;">การทำงาน</th></tr></thead>';
-    echo '<tbody>';
-    if (empty($slugs)) {
-        echo '<tr><td colspan="4">ยังไม่มีตาราง custom ให้สร้าง slug ก่อนเริ่มจัดการข้อมูล</td></tr>';
-    } else {
-        foreach ($slugs as $slug) {
-            $table_name = wppc_get_table_name($slug);
-            $count = wppc_get_table_row_count($slug);
-            echo '<tr>';
-            echo '<td><strong>' . esc_html($slug) . '</strong></td>';
-            echo '<td><code>' . esc_html($table_name) . '</code></td>';
-            echo '<td>' . esc_html(number_format_i18n($count)) . '</td>';
-            echo '<td>';
-            echo '<div class="wppc-inline-actions">';
-            echo '<a class="button button-small" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">จัดการข้อมูล</a> ';
-            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-table-types')) . '" class="wppc-inline-form">';
-            wp_nonce_field('wppc_delete_table');
-            echo '<input type="hidden" name="page" value="wppc-table-types">';
-            echo '<input type="hidden" name="wppc_action" value="delete_table">';
-            echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-            echo '<button type="submit" class="button button-small button-link-delete" onclick="return confirm(\'ยืนยันการลบตารางและข้อมูลทั้งหมด?\');">ลบตาราง</button>';
-            echo '</form>';
-            echo '</div>';
-            echo '</td>';
-            echo '</tr>';
-        }
-    }
-    echo '</tbody>';
-    echo '</table>';
+    echo '<div id="wppc-table-types-container">';
+    echo wppc_render_table_types_table_html();
     echo '</div>';
     echo '</div>';
 
