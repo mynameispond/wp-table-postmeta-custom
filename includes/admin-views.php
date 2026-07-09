@@ -209,8 +209,8 @@ function wppc_render_table_types_page()
 
     echo '<div class="wppc-card">';
     echo '<h2>ตารางที่มีอยู่</h2>';
-    echo '<div id="wppc-table-types-container">';
-    echo wppc_render_table_types_table_html();
+    echo '<div id="wppc-table-types-container" class="wppc-loading-relative" style="min-height: 150px;">';
+    echo '<div class="wppc-loading-overlay"><div class="wppc-spinner"></div></div>';
     echo '</div>';
     echo '</div>';
 
@@ -268,8 +268,13 @@ function wppc_render_data_manager_page()
     echo '</div>';
     echo '</div>';
 
-    echo '<div id="wppc-data-table-container">';
-    echo wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged);
+    echo '<div id="wppc-data-table-container" class="wppc-loading-relative" style="min-height: 200px;"';
+    echo ' data-table="' . esc_attr($slug) . '"';
+    echo ' data-post-id="' . esc_attr($post_id_filter) . '"';
+    echo ' data-meta-key="' . esc_attr($meta_key_filter) . '"';
+    echo ' data-meta-value="' . esc_attr($meta_value_filter) . '"';
+    echo ' data-paged="' . esc_attr($paged) . '">';
+    echo '<div class="wppc-loading-overlay"><div class="wppc-spinner"></div></div>';
     echo '</div>';
 
     wppc_render_admin_page_footer();
