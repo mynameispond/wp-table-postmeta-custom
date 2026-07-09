@@ -17,12 +17,49 @@ define('WPPC_SYNC_STATE_OPTION', 'wppc_sync_state');
 
 require_once plugin_dir_path(__FILE__) . 'includes/db-helpers.php';
 require_once plugin_dir_path(__FILE__) . 'includes/admin-views.php';
+require_once plugin_dir_path(__FILE__) . 'includes/ajax-actions.php';
 
 add_filter('posts_where', 'wppc_filter_posts_where_for_meta_query_wppc', 10, 2);
 add_action('admin_notices', 'wppc_render_admin_notice');
 add_action('admin_enqueue_scripts', 'wppc_enqueue_admin_assets');
 
+function wppc_enqueue_admin_assets()
+{
+    $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+    $allowed_pages = wppc_get_admin_pages();
+    if (!in_array($page, $allowed_pages, true)) {
+        return;
+    }
 
+    wp_enqueue_style(
+        'wppc-admin-css',
+        plugin_dir_url(__FILE__) . 'assets/wppc-admin.css',
+        array(),
+        WPPC_VERSION
+    );
+
+    wp_enqueue_script(
+        'wppc-admin-js',
+        plugin_dir_url(__FILE__) . 'assets/wppc-admin.js',
+        array('jquery'),
+        WPPC_VERSION,
+        true
+    );
+
+    wp_localize_script('wppc-admin-js', 'wppc_params', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'active_slug' => wppc_get_admin_active_slug(),
+        'nonces' => array(
+            'create_table' => wp_create_nonce('wppc_create_table'),
+            'delete_table' => wp_create_nonce('wppc_delete_table'),
+            'save_record' => wp_create_nonce('wppc_save_record'),
+            'delete_record' => wp_create_nonce('wppc_delete_record'),
+            'bulk_delete' => wp_create_nonce('wppc_bulk_delete'),
+            'truncate_table' => wp_create_nonce('wppc_truncate_table'),
+            'import_data' => wp_create_nonce('wppc_import_data'),
+        )
+    ));
+}
 
 function wppc_handle_admin_actions()
 {

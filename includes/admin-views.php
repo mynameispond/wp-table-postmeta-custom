@@ -72,21 +72,7 @@ function wppc_clamp_batch_size($batch_size)
     return $batch_size;
 }
 
-function wppc_enqueue_admin_assets()
-{
-    $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-    $allowed_pages = wppc_get_admin_pages();
-    if (!in_array($page, $allowed_pages, true)) {
-        return;
-    }
 
-    wp_enqueue_style(
-        'wppc-admin-css',
-        plugin_dir_url(dirname(__FILE__)) . 'assets/wppc-admin.css',
-        array(),
-        WPPC_VERSION
-    );
-}
 
 function wppc_render_admin_view_tabs($active_page)
 {
