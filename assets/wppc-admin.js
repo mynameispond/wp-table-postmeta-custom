@@ -495,8 +495,16 @@ jQuery(document).ready(function($) {
         $('.wppc-import-form').on('submit', function(e) {
             e.preventDefault();
             var $form = $(this);
-            var $card = $form.closest('.wppc-impexp-column');
+            var fileInput = $form.find('input[type="file"]')[0];
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                var file = fileInput.files[0];
+                if (file.size > 10 * 1024 * 1024) {
+                    showNotice('error', 'ไฟล์ใหญ่เกิน 10MB');
+                    return;
+                }
+            }
 
+            var $card = $form.closest('.wppc-impexp-column');
             showLoading($card);
 
             var formData = new FormData(this);
