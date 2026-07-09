@@ -53,6 +53,30 @@ jQuery(document).ready(function($) {
         // Strip on page load
         stripInlineOnclick();
 
+        // Fetch table types on initial page load
+        function fetchTableTypes() {
+            showLoading($card);
+            $.get(wppc_params.ajax_url, {
+                action: 'wppc_get_table_types',
+                nonce: wppc_params.nonces.get_table_types
+            })
+            .done(function(response) {
+                if (response.success) {
+                    $container.html(response.html);
+                    stripInlineOnclick();
+                } else {
+                    showNotice('error', response.message || 'เกิดข้อผิดพลาดในการโหลดตาราง');
+                }
+            })
+            .fail(function() {
+                showNotice('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+            })
+            .always(function() {
+                hideLoading($card);
+            });
+        }
+        fetchTableTypes();
+
         // Intercept "สร้างตารางใหม่" form submit
         $('#new_table_slug').closest('form').on('submit', function(e) {
             e.preventDefault();
@@ -155,6 +179,9 @@ jQuery(document).ready(function($) {
 
         function fetchTable(data) {
             var $tableCard = $dataContainer.find('.wppc-card');
+            if ($tableCard.length === 0) {
+                $tableCard = $dataContainer;
+            }
             showLoading($tableCard);
 
             $.get(wppc_params.ajax_url, data)
@@ -486,6 +513,20 @@ jQuery(document).ready(function($) {
                 hideLoading($tableCard);
             });
         });
+
+        // Initial load: fetch data table from container data attributes
+        var initTable = $dataContainer.data('table') || '';
+        if (initTable !== '') {
+            fetchTable({
+                action: 'wppc_get_data_table',
+                nonce: wppc_params.nonces.get_data_table,
+                table: initTable,
+                filter_post_id: $dataContainer.data('post-id') || '',
+                filter_meta_key: $dataContainer.data('meta-key') || '',
+                filter_meta_value: $dataContainer.data('meta-value') || '',
+                paged: parseInt($dataContainer.data('paged'), 10) || 1
+            });
+        }
     }
 
     // ==========================================
