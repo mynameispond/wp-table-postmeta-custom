@@ -619,7 +619,7 @@ add_filter('posts_where', 'wppc_filter_posts_where_for_meta_query_wppc', 10, 2);
 
 function wppc_get_admin_pages()
 {
-    return array('wppc-overview', 'wppc-table-types', 'wppc-data-manager');
+    return array('wppc-table-types', 'wppc-data-manager', 'wppc-import-export');
 }
 
 function wppc_is_wppc_admin_page($page = '')
@@ -691,7 +691,7 @@ function wppc_clamp_batch_size($batch_size)
 function wppc_enqueue_admin_assets()
 {
     $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-    $allowed_pages = array('wppc-overview', 'wppc-table-types', 'wppc-data-manager');
+    $allowed_pages = wppc_get_admin_pages();
     if (!in_array($page, $allowed_pages, true)) {
         return;
     }
@@ -708,17 +708,17 @@ add_action('admin_enqueue_scripts', 'wppc_enqueue_admin_assets');
 function wppc_render_admin_view_tabs($active_page)
 {
     $views = array(
-        'wppc-overview' => array(
-            'label' => 'ภาพรวม',
-            'description' => 'สรุปสถานะและตัวเลขหลักของปลั๊กอิน',
-        ),
         'wppc-table-types' => array(
             'label' => 'รายการประเภทตาราง',
             'description' => 'สร้างและลบตาราง postmeta ตาม slug',
         ),
         'wppc-data-manager' => array(
-            'label' => 'จัดการข้อมูลตาราง',
-            'description' => 'เพิ่ม แก้ไข ลบ และจัดการข้อมูลขั้นสูง',
+            'label' => 'จัดการข้อมูล',
+            'description' => 'เพิ่ม แก้ไข ลบ และค้นหาข้อมูลในตาราง',
+        ),
+        'wppc-import-export' => array(
+            'label' => 'นำเข้า/ส่งออก',
+            'description' => 'นำเข้าและส่งออกข้อมูลในรูปแบบ CSV/JSON',
         ),
     );
 
@@ -1359,40 +1359,40 @@ function wppc_handle_admin_actions()
             check_admin_referer('wppc_import_data');
             $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
             if (!in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', 'ไม่พบตารางที่เลือก');
             }
             $target_type = isset($_POST['import_target']) && wp_unslash($_POST['import_target']) === 'main' ? 'main' : 'custom';
             if ($target_type === 'custom' && !wppc_table_exists($slug)) {
                 $created = wppc_create_meta_table($slug);
                 if (is_wp_error($created)) {
-                    wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $created->get_error_message(), array('table' => $slug));
+                    wppc_admin_redirect_with_notice('wppc-import-export', 'error', $created->get_error_message(), array('table' => $slug));
                 }
             }
             $format = isset($_POST['import_format']) ? sanitize_key(wp_unslash($_POST['import_format'])) : '';
             if (!in_array($format, array('json', 'csv'), true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'รูปแบบไฟล์นำเข้าไม่ถูกต้อง', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', 'รูปแบบไฟล์นำเข้าไม่ถูกต้อง', array('table' => $slug));
             }
             if (empty($_FILES['import_file']) || !isset($_FILES['import_file']['tmp_name']) || !is_uploaded_file($_FILES['import_file']['tmp_name'])) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไฟล์อัปโหลดไม่ถูกต้อง', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', 'ไฟล์อัปโหลดไม่ถูกต้อง', array('table' => $slug));
             }
             $file = $_FILES['import_file'];
             if (!empty($file['error'])) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'อัปโหลดไฟล์ไม่สำเร็จ', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', 'อัปโหลดไฟล์ไม่สำเร็จ', array('table' => $slug));
             }
             if (!empty($file['size']) && $file['size'] > 10 * 1024 * 1024) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไฟล์ใหญ่เกิน 10MB', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', 'ไฟล์ใหญ่เกิน 10MB', array('table' => $slug));
             }
 
             $rows = $format === 'json'
                 ? wppc_import_rows_from_json_file($file['tmp_name'])
                 : wppc_import_rows_from_csv_file($file['tmp_name']);
             if (is_wp_error($rows)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $rows->get_error_message(), array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-import-export', 'error', $rows->get_error_message(), array('table' => $slug));
             }
 
             $result = wppc_import_rows_into_table($slug, $rows, $target_type);
             $message = sprintf('นำเข้าข้อมูลเสร็จแล้ว: สำเร็จ %d รายการ, ข้าม %d รายการ', $result['inserted'], $result['skipped']);
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', $message, array('table' => $slug));
+            wppc_admin_redirect_with_notice('wppc-import-export', 'success', $message, array('table' => $slug));
             break;
 
         case 'export_data':
@@ -1434,26 +1434,26 @@ function wppc_register_admin_menu()
         'WP Postmeta Custom',
         'WP Postmeta Custom',
         'manage_options',
-        'wppc-overview',
-        'wppc_render_overview_page'
-    );
-
-    add_submenu_page(
-        null,
-        'รายการประเภทตาราง',
-        '',
-        'manage_options',
         'wppc-table-types',
         'wppc_render_table_types_page'
     );
 
     add_submenu_page(
         null,
-        'จัดการข้อมูลตาราง',
+        'จัดการข้อมูล',
         '',
         'manage_options',
         'wppc-data-manager',
         'wppc_render_data_manager_page'
+    );
+
+    add_submenu_page(
+        null,
+        'นำเข้า/ส่งออกข้อมูล',
+        '',
+        'manage_options',
+        'wppc-import-export',
+        'wppc_render_import_export_page'
     );
 }
 add_action('admin_menu', 'wppc_register_admin_menu', 99);
@@ -1465,7 +1465,7 @@ function wppc_move_menu_to_tools_bottom()
         return;
     }
 
-    $target_slug = 'wppc-overview';
+    $target_slug = 'wppc-table-types';
     $target_item = null;
     foreach ($submenu['tools.php'] as $index => $item) {
         if (isset($item[2]) && $item[2] === $target_slug) {
@@ -1498,45 +1498,6 @@ function wppc_render_slug_tabs($current_slug, $page)
     echo '</h2>';
 }
 
-function wppc_render_overview_page()
-{
-    if (!current_user_can('manage_options')) {
-        wp_die(esc_html__('คุณไม่มีสิทธิ์เข้าถึงหน้านี้', 'wp-table-postmeta-custom'));
-    }
-
-    $slugs = wppc_get_registered_slugs();
-    $total_rows = 0;
-    foreach ($slugs as $slug) {
-        $total_rows += wppc_get_table_row_count($slug);
-    }
-
-    wppc_render_admin_page_header(
-        'WP Postmeta Custom',
-        'หน้าจัดการหลายตาราง postmeta พร้อมเครื่องมือ import/export',
-        'wppc-overview'
-    );
-
-    echo '<div class="wppc-card wppc-card-metrics">';
-    echo '<h2>สรุปภาพรวม</h2>';
-    echo '<div class="wppc-metric-grid">';
-    echo '<div class="wppc-metric-item"><span class="wppc-metric-label">จำนวนประเภทตาราง</span><strong class="wppc-metric-value">' . esc_html(number_format_i18n(count($slugs))) . '</strong></div>';
-    echo '<div class="wppc-metric-item"><span class="wppc-metric-label">จำนวนแถวข้อมูลทั้งหมด</span><strong class="wppc-metric-value">' . esc_html(number_format_i18n($total_rows)) . '</strong></div>';
-    echo '<div class="wppc-metric-item"><span class="wppc-metric-label">เวอร์ชันปลั๊กอิน</span><strong class="wppc-metric-value">' . esc_html(WPPC_VERSION) . '</strong></div>';
-    echo '</div>';
-    echo '</div>';
-
-    echo '<div class="wppc-card">';
-    echo '<h2>ทางลัด</h2>';
-    echo '<p class="wppc-inline-actions">';
-    echo '<a class="button button-primary" href="' . esc_url(wppc_admin_url('wppc-table-types')) . '">ไปหน้ารายการประเภทตาราง</a> ';
-    if (!empty($slugs)) {
-        echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager')) . '">ไปหน้าจัดการข้อมูลตาราง</a>';
-    }
-    echo '</p>';
-    echo '</div>';
-
-    wppc_render_admin_page_footer();
-}
 
 function wppc_render_table_types_page()
 {
@@ -1627,8 +1588,8 @@ function wppc_render_data_manager_page()
     $edit_row = $edit_id > 0 ? wppc_get_record_by_id($slug, $edit_id) : null;
 
     wppc_render_admin_page_header(
-        'จัดการข้อมูลตาราง',
-        'เพิ่ม แก้ไข ลบ ค้นหา และจัดการเครื่องมือขั้นสูงของข้อมูลในแต่ละตาราง',
+        'จัดการข้อมูล',
+        'เพิ่ม แก้ไข ลบ และค้นหาข้อมูลในแต่ละตาราง',
         'wppc-data-manager'
     );
     wppc_render_slug_tabs($slug, 'wppc-data-manager');
@@ -1662,74 +1623,6 @@ function wppc_render_data_manager_page()
     echo '</form>';
     echo '</div>';
     echo '</div>';
-
-    echo '<div class="wppc-card">';
-    echo '<h2>นำเข้า/ส่งออกข้อมูล</h2>';
-    echo '<div class="wppc-impexp-container">';
-
-    // Column 1: Export Controls
-    echo '<div class="wppc-impexp-column">';
-    echo '<h3>ส่งออกข้อมูล (Export)</h3>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" class="wppc-sync-form-group">';
-    wp_nonce_field('wppc_export_data');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="export_data">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-
-    echo '<div class="wppc-form-row">';
-    echo '<label>ตารางต้นทาง:</label>';
-    echo '<select name="export_source"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>รูปแบบไฟล์:</label>';
-    echo '<select name="format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>คีย์ข้อมูล:</label>';
-    echo '<input type="text" name="export_keys" placeholder="เช่น price, stock (ว่างเพื่อส่งออกทั้งหมด)" style="width:220px;"> ';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
-    echo '<button type="submit" class="button button-primary">ส่งออกไฟล์</button>';
-    echo '</div>';
-    echo '</form>';
-    echo '</div>'; // wppc-impexp-column (Export)
-
-    // Column 2: Import Controls
-    echo '<div class="wppc-impexp-column">';
-    echo '<h3>นำเข้าข้อมูล (Import)</h3>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" enctype="multipart/form-data" class="wppc-sync-form-group">';
-    wp_nonce_field('wppc_import_data');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="import_data">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-
-    echo '<div class="wppc-form-row">';
-    echo '<label>ตารางปลายทาง:</label>';
-    echo '<select name="import_target"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>รูปแบบไฟล์:</label>';
-    echo '<select name="import_format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
-    echo '<label>เลือกไฟล์:</label>';
-    echo '<input type="file" name="import_file" accept=".json,.csv" required style="max-width:220px;">';
-    echo '</div>';
-
-    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
-    echo '<button type="submit" class="button button-primary">นำเข้าไฟล์</button>';
-    echo '</div>';
-    echo '</form>';
-    echo '<p class="description" style="margin-top:10px;">ขนาดไฟล์สูงสุด 10MB คอลัมน์ต้องมี `post_id`, `meta_key`, `meta_value`</p>';
-    echo '</div>'; // wppc-impexp-column (Import)
-
-    echo '</div>'; // wppc-impexp-container
-    echo '</div>'; // wppc-card
 
 
 
@@ -1840,6 +1733,99 @@ function wppc_render_data_manager_page()
     echo '  });});';
     echo '});';
     echo '</script>';
+
+    wppc_render_admin_page_footer();
+}
+
+function wppc_render_import_export_page()
+{
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('คุณไม่มีสิทธิ์เข้าถึงหน้านี้', 'wp-table-postmeta-custom'));
+    }
+
+    $slug = wppc_get_admin_active_slug();
+
+    wppc_render_admin_page_header(
+        'นำเข้า/ส่งออกข้อมูล',
+        'นำเข้าและส่งออกข้อมูลระหว่างตารางย่อยกับตาราง wp_postmeta หลัก ในรูปแบบ CSV หรือ JSON',
+        'wppc-import-export'
+    );
+    wppc_render_slug_tabs($slug, 'wppc-import-export');
+
+    if ($slug === '') {
+        echo '<div class="wppc-card"><h2>ยังไม่มีตาราง custom</h2><p>ให้สร้าง slug ที่หน้า รายการประเภทตาราง ก่อนเริ่มนำเข้าหรือส่งออกข้อมูล</p>';
+        echo '<p><a class="button button-primary" href="' . esc_url(wppc_admin_url('wppc-table-types')) . '">ไปสร้างตาราง</a></p></div>';
+        wppc_render_admin_page_footer();
+        return;
+    }
+
+    echo '<div class="wppc-card">';
+    echo '<h2>ส่งออก/นำเข้าข้อมูล</h2>';
+    echo '<div class="wppc-impexp-container">';
+
+    // Column 1: Export Controls
+    echo '<div class="wppc-impexp-column">';
+    echo '<h3>ส่งออกข้อมูล (Export)</h3>';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-import-export')) . '" class="wppc-sync-form-group">';
+    wp_nonce_field('wppc_export_data');
+    echo '<input type="hidden" name="page" value="wppc-import-export">';
+    echo '<input type="hidden" name="wppc_action" value="export_data">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+
+    echo '<div class="wppc-form-row">';
+    echo '<label>ตารางต้นทาง:</label>';
+    echo '<select name="export_source"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>รูปแบบไฟล์:</label>';
+    echo '<select name="format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>คีย์ข้อมูล:</label>';
+    echo '<input type="text" name="export_keys" placeholder="เช่น price, stock (ว่างเพื่อส่งออกทั้งหมด)" style="width:220px;"> ';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
+    echo '<button type="submit" class="button button-primary">ส่งออกไฟล์</button>';
+    echo '</div>';
+    echo '</form>';
+    echo '</div>'; // wppc-impexp-column (Export)
+
+    // Column 2: Import Controls
+    echo '<div class="wppc-impexp-column">';
+    echo '<h3>นำเข้าข้อมูล (Import)</h3>';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-import-export')) . '" enctype="multipart/form-data" class="wppc-sync-form-group">';
+    wp_nonce_field('wppc_import_data');
+    echo '<input type="hidden" name="page" value="wppc-import-export">';
+    echo '<input type="hidden" name="wppc_action" value="import_data">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+
+    echo '<div class="wppc-form-row">';
+    echo '<label>ตารางปลายทาง:</label>';
+    echo '<select name="import_target"><option value="custom">ตารางย่อยปัจจุบัน (wp_postmeta_' . esc_attr($slug) . ')</option><option value="main">ตาราง wp_postmeta หลัก</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>รูปแบบไฟล์:</label>';
+    echo '<select name="import_format"><option value="csv">CSV</option><option value="json">JSON</option></select>';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 8px;">';
+    echo '<label>เลือกไฟล์:</label>';
+    echo '<input type="file" name="import_file" accept=".json,.csv" required style="max-width:220px;">';
+    echo '</div>';
+
+    echo '<div class="wppc-form-row" style="margin-top: 12px;">';
+    echo '<button type="submit" class="button button-primary">นำเข้าไฟล์</button>';
+    echo '</div>';
+    echo '</form>';
+    echo '<p class="description" style="margin-top:10px;">ขนาดไฟล์สูงสุด 10MB คอลัมน์ต้องมี `post_id`, `meta_key`, `meta_value`</p>';
+    echo '</div>'; // wppc-impexp-column (Import)
+
+    echo '</div>'; // wppc-impexp-container
+    echo '</div>'; // wppc-card
 
     wppc_render_admin_page_footer();
 }
