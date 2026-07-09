@@ -228,9 +228,6 @@ function wppc_render_data_manager_page()
     $meta_key_filter = isset($_GET['filter_meta_key']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_key'])) : '';
     $meta_value_filter = isset($_GET['filter_meta_value']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_value'])) : '';
     $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
-    $per_page = 20;
-    $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged, $per_page);
-    $total_pages = max(1, (int) ceil($records['total'] / $per_page));
     $edit_id = isset($_GET['edit_id']) ? absint($_GET['edit_id']) : 0;
     $edit_row = $edit_id > 0 ? wppc_get_record_by_id($slug, $edit_id) : null;
 
@@ -271,115 +268,9 @@ function wppc_render_data_manager_page()
     echo '</div>';
     echo '</div>';
 
-
-
-    echo '<div class="wppc-card">';
-    echo '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-    echo '<h2 style="margin:0;">ข้อมูลในตาราง</h2>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" style="margin:0;">';
-    wp_nonce_field('wppc_truncate_table');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="truncate_table">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง ' . esc_js($slug) . '? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
-    echo '</form>';
+    echo '<div id="wppc-data-table-container">';
+    echo wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged);
     echo '</div>';
-
-    echo '<form method="get" action="' . esc_url(admin_url('tools.php')) . '" class="wppc-inline-actions" style="margin-bottom:10px;">';
-    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<input type="number" name="filter_post_id" min="1" value="' . esc_attr($post_id_filter) . '" placeholder="post_id" style="width:120px;"> ';
-    echo '<input type="search" name="filter_meta_key" value="' . esc_attr($meta_key_filter) . '" placeholder="meta_key"> ';
-    echo '<input type="search" name="filter_meta_value" value="' . esc_attr($meta_value_filter) . '" placeholder="meta_value"> ';
-    echo '<button type="submit" class="button">ค้นหา</button> ';
-    if ($post_id_filter !== '' || $meta_key_filter !== '' || $meta_value_filter !== '') {
-        echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
-    }
-    echo '</form>';
-
-    // Bulk delete form wrapping the table
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-bulk-form">';
-    wp_nonce_field('wppc_bulk_delete');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="bulk_delete">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-
-    if (!empty($records['rows'])) {
-        echo '<div class="wppc-inline-actions" style="margin-bottom:8px;">';
-        echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการลบข้อมูลที่เลือก?\');">ลบที่เลือก</button> ';
-        echo '<label style="cursor:pointer;"><input type="checkbox" id="wppc-select-all"> เลือกทั้งหมด</label>';
-        echo '</div>';
-    }
-
-    echo '<table class="widefat striped"><thead><tr><th style="width:40px;"><input type="checkbox" id="wppc-select-all-top"></th><th style="width:70px;">ID</th><th style="width:110px;">รหัสโพสต์</th><th style="width:220px;">คีย์ข้อมูล</th><th>ค่าข้อมูล</th><th style="width:160px;">การทำงาน</th></tr></thead><tbody>';
-    if (empty($records['rows'])) {
-        echo '<tr><td colspan="6">ไม่พบข้อมูล</td></tr>';
-    } else {
-        foreach ($records['rows'] as $row) {
-            $row_value = (string) $row['meta_value'];
-            if (strlen($row_value) > 160) {
-                $row_value = substr($row_value, 0, 160) . '...';
-            }
-            $edit_url = wppc_admin_url('wppc-data-manager', array(
-                'table' => $slug,
-                'paged' => $paged,
-                'filter_post_id' => $post_id_filter,
-                'filter_meta_key' => $meta_key_filter,
-                'filter_meta_value' => $meta_value_filter,
-                'edit_id' => $row['meta_id'],
-            ));
-            echo '<tr>';
-            echo '<td><input type="checkbox" name="bulk_ids[]" value="' . esc_attr($row['meta_id']) . '" class="wppc-row-cb"></td>';
-            echo '<td>' . esc_html($row['meta_id']) . '</td>';
-            echo '<td>' . esc_html($row['post_id']) . '</td>';
-            echo '<td><code>' . esc_html($row['meta_key']) . '</code></td>';
-            echo '<td><code>' . esc_html($row_value) . '</code></td>';
-            echo '<td><a class="button button-small" href="' . esc_url($edit_url) . '">แก้ไข</a> ';
-            echo '<button type="button" class="button button-small button-link-delete" onclick="if(confirm(\'ยืนยันการลบข้อมูลนี้?\')) { var f=document.getElementById(\'wppc-del-' . esc_attr($row['meta_id']) . '\'); f.submit(); }">ลบ</button></td>';
-            echo '</tr>';
-        }
-    }
-    echo '</tbody></table>';
-    echo '</form>';
-
-    // Individual delete forms (hidden, outside the bulk form to avoid nesting)
-    if (!empty($records['rows'])) {
-        foreach ($records['rows'] as $row) {
-            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-del-' . esc_attr($row['meta_id']) . '" style="display:none;">';
-            wp_nonce_field('wppc_delete_record');
-            echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="delete_record"><input type="hidden" name="table" value="' . esc_attr($slug) . '"><input type="hidden" name="meta_id" value="' . esc_attr($row['meta_id']) . '">';
-            echo '</form>';
-        }
-    }
-
-    if ($total_pages > 1) {
-        echo '<div class="tablenav"><div class="tablenav-pages" style="margin:12px 0;">';
-        for ($i = 1; $i <= $total_pages; $i++) {
-            $page_url = wppc_admin_url('wppc-data-manager', array(
-                'table' => $slug,
-                'filter_post_id' => $post_id_filter,
-                'filter_meta_key' => $meta_key_filter,
-                'filter_meta_value' => $meta_value_filter,
-                'paged' => $i,
-            ));
-            $style = $i === $paged ? 'style="font-weight:700;text-decoration:underline;"' : '';
-            echo '<a ' . $style . ' href="' . esc_url($page_url) . '">' . esc_html($i) . '</a> ';
-        }
-        echo '</div></div>';
-    }
-
-    echo '</div>'; // wppc-card
-
-    // Select-all checkbox JS
-    echo '<script>';
-    echo 'document.addEventListener("DOMContentLoaded",function(){';
-    echo '  var tops=document.querySelectorAll("#wppc-select-all-top,#wppc-select-all");';
-    echo '  var cbs=document.querySelectorAll(".wppc-row-cb");';
-    echo '  tops.forEach(function(t){t.addEventListener("change",function(){';
-    echo '    cbs.forEach(function(c){c.checked=t.checked;});';
-    echo '    tops.forEach(function(o){o.checked=t.checked;});';
-    echo '  });});';
-    echo '});';
-    echo '</script>';
 
     wppc_render_admin_page_footer();
 }
@@ -475,4 +366,121 @@ function wppc_render_import_export_page()
     echo '</div>'; // wppc-card
 
     wppc_render_admin_page_footer();
+}
+
+
+/**
+ * Render the HTML for the data manager table, including the search filter,
+ * the bulk actions form, pagination, and hidden delete forms.
+ *
+ * @param string $slug
+ * @param string $post_id_filter
+ * @param string $meta_key_filter
+ * @param string $meta_value_filter
+ * @param int $paged
+ * @return string
+ */
+function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged)
+{
+    $per_page = 20;
+    $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged, $per_page);
+    $total_pages = max(1, (int) ceil($records['total'] / $per_page));
+
+    ob_start();
+    echo '<div class="wppc-card">';
+    echo '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+    echo '<h2 style="margin:0;">ข้อมูลในตาราง</h2>';
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" style="margin:0;">';
+    wp_nonce_field('wppc_truncate_table');
+    echo '<input type="hidden" name="page" value="wppc-data-manager">';
+    echo '<input type="hidden" name="wppc_action" value="truncate_table">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+    echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง \' . esc_js($slug) . \'? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
+    echo '</form>';
+    echo '</div>';
+
+    echo '<form method="get" action="' . esc_url(admin_url('tools.php')) . '" class="wppc-inline-actions" style="margin-bottom:10px;">';
+    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+    echo '<input type="number" name="filter_post_id" min="1" value="' . esc_attr($post_id_filter) . '" placeholder="post_id" style="width:120px;"> ';
+    echo '<input type="search" name="filter_meta_key" value="' . esc_attr($meta_key_filter) . '" placeholder="meta_key"> ';
+    echo '<input type="search" name="filter_meta_value" value="' . esc_attr($meta_value_filter) . '" placeholder="meta_value"> ';
+    echo '<button type="submit" class="button">ค้นหา</button> ';
+    if ($post_id_filter !== '' || $meta_key_filter !== '' || $meta_value_filter !== '') {
+        echo '<a class="button" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
+    }
+    echo '</form>';
+
+    // Bulk delete form wrapping the table
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-bulk-form">';
+    wp_nonce_field('wppc_bulk_delete');
+    echo '<input type="hidden" name="page" value="wppc-data-manager">';
+    echo '<input type="hidden" name="wppc_action" value="bulk_delete">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+
+    if (!empty($records['rows'])) {
+        echo '<div class="wppc-inline-actions" style="margin-bottom:8px;">';
+        echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการลบข้อมูลที่เลือก?\');">ลบที่เลือก</button> ';
+        echo '<label style="cursor:pointer;"><input type="checkbox" id="wppc-select-all"> เลือกทั้งหมด</label>';
+        echo '</div>';
+    }
+
+    echo '<table class="widefat striped"><thead><tr><th style="width:40px;"><input type="checkbox" id="wppc-select-all-top"></th><th style="width:70px;">ID</th><th style="width:110px;">รหัสโพสต์</th><th style="width:220px;">คีย์ข้อมูล</th><th>ค่าข้อมูล</th><th style="width:160px;">การทำงาน</th></tr></thead><tbody>';
+    if (empty($records['rows'])) {
+        echo '<tr><td colspan="6">ไม่พบข้อมูล</td></tr>';
+    } else {
+        foreach ($records['rows'] as $row) {
+            $row_value = (string) $row['meta_value'];
+            if (strlen($row_value) > 160) {
+                $row_value = substr($row_value, 0, 160) . '...';
+            }
+            $edit_url = wppc_admin_url('wppc-data-manager', array(
+                'table' => $slug,
+                'paged' => $paged,
+                'filter_post_id' => $post_id_filter,
+                'filter_meta_key' => $meta_key_filter,
+                'filter_meta_value' => $meta_value_filter,
+                'edit_id' => $row['meta_id'],
+            ));
+            echo '<tr>';
+            echo '<td><input type="checkbox" name="bulk_ids[]" value="' . esc_attr($row['meta_id']) . '" class="wppc-row-cb"></td>';
+            echo '<td>' . esc_html($row['meta_id']) . '</td>';
+            echo '<td>' . esc_html($row['post_id']) . '</td>';
+            echo '<td><code>' . esc_html($row['meta_key']) . '</code></td>';
+            echo '<td><code>' . esc_html($row_value) . '</code></td>';
+            echo '<td><a class="button button-small" href="' . esc_url($edit_url) . '">แก้ไข</a> ';
+            echo '<button type="button" class="button button-small button-link-delete" onclick="if(confirm(\'ยืนยันการลบข้อมูลนี้?\')) { var f=document.getElementById(\'wppc-del-' . esc_attr($row['meta_id']) . '\'); f.submit(); }">ลบ</button></td>';
+            echo '</tr>';
+        }
+    }
+    echo '</tbody></table>';
+    echo '</form>';
+
+    // Individual delete forms (hidden, outside the bulk form to avoid nesting)
+    if (!empty($records['rows'])) {
+        foreach ($records['rows'] as $row) {
+            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-del-' . esc_attr($row['meta_id']) . '" style="display:none;">';
+            wp_nonce_field('wppc_delete_record');
+            echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="delete_record"><input type="hidden" name="table" value="' . esc_attr($slug) . '"><input type="hidden" name="meta_id" value="' . esc_attr($row['meta_id']) . '">';
+            echo '</form>';
+        }
+    }
+
+    if ($total_pages > 1) {
+        echo '<div class="tablenav"><div class="tablenav-pages" style="margin:12px 0;">';
+        for ($i = 1; $i <= $total_pages; $i++) {
+            $page_url = wppc_admin_url('wppc-data-manager', array(
+                'table' => $slug,
+                'filter_post_id' => $post_id_filter,
+                'filter_meta_key' => $meta_key_filter,
+                'filter_meta_value' => $meta_value_filter,
+                'paged' => $i,
+            ));
+            $style = $i === $paged ? 'style="font-weight:700;text-decoration:underline;"' : '';
+            echo '<a ' . $style . ' href="' . esc_url($page_url) . '">' . esc_html($i) . '</a> ';
+        }
+        echo '</div></div>';
+    }
+
+    echo '</div>'; // wppc-card
+    return ob_get_clean();
 }

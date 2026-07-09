@@ -73,3 +73,24 @@ function wppc_ajax_delete_table() {
     ));
 }
 add_action('wp_ajax_wppc_delete_table', 'wppc_ajax_delete_table');
+
+/**
+ * AJAX callback to retrieve the data manager table HTML.
+ */
+function wppc_ajax_get_data_table() {
+    wppc_verify_ajax_request('wppc_save_record');
+
+    $slug = isset($_GET['table']) ? wppc_normalize_slug(wp_unslash($_GET['table'])) : '';
+    $post_id = isset($_GET['filter_post_id']) ? sanitize_text_field(wp_unslash($_GET['filter_post_id'])) : '';
+    $meta_key = isset($_GET['filter_meta_key']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_key'])) : '';
+    $meta_value = isset($_GET['filter_meta_value']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_value'])) : '';
+    $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
+
+    $html = wppc_render_data_manager_table_html($slug, $post_id, $meta_key, $meta_value, $paged);
+
+    wp_send_json(array(
+        'success' => true,
+        'html' => $html,
+    ));
+}
+add_action('wp_ajax_wppc_get_data_table', 'wppc_ajax_get_data_table');
