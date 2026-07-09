@@ -332,3 +332,19 @@ function wppc_ajax_import_data() {
 }
 add_action('wp_ajax_wppc_import_data', 'wppc_ajax_import_data');
 
+/**
+ * AJAX callback to retrieve the table types list HTML.
+ */
+function wppc_ajax_get_table_types() {
+    wppc_verify_ajax_request('wppc_get_table_types');
+
+    $html = wppc_render_table_types_table_html();
+
+    wp_send_json(array(
+        'success' => true,
+        'html' => $html,
+    ));
+}
+add_action('wp_ajax_wppc_get_table_types', 'wppc_ajax_get_table_types');
+
+
