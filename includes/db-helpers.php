@@ -972,8 +972,8 @@ function wppc_stream_export_table_data($slug, $format, $source_type = 'custom', 
             fputcsv($output, array(
                 isset($row['meta_id']) ? $row['meta_id'] : '',
                 isset($row['post_id']) ? $row['post_id'] : '',
-                isset($row['meta_key']) ? $row['meta_key'] : '',
-                isset($row['meta_value']) ? $row['meta_value'] : '',
+                isset($row['meta_key']) ? wppc_escape_csv_cell($row['meta_key']) : '',
+                isset($row['meta_value']) ? wppc_escape_csv_cell($row['meta_value']) : '',
             ));
         }
         $offset += $batch_size;
@@ -982,6 +982,24 @@ function wppc_stream_export_table_data($slug, $format, $source_type = 'custom', 
 
     fclose($output);
     exit;
+}
+
+function wppc_escape_csv_cell($value)
+{
+    if ($value === null) {
+        return '';
+    }
+
+    if (!is_scalar($value)) {
+        return '';
+    }
+
+    $str = (string) $value;
+    if ($str !== '' && in_array($str[0], array('=', '+', '-', '@', "\t", "\r", '|'), true)) {
+        return "'" . $str;
+    }
+
+    return $str;
 }
 
 
