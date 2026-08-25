@@ -20,6 +20,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/admin-views.php';
 require_once plugin_dir_path(__FILE__) . 'includes/ajax-actions.php';
 
 add_filter('posts_where', 'wppc_filter_posts_where_for_meta_query_wppc', 10, 2);
+add_action('deleted_post', 'wppc_cleanup_custom_meta_on_delete_post', 10, 1);
 add_action('admin_notices', 'wppc_render_admin_notice');
 add_action('admin_enqueue_scripts', 'wppc_enqueue_admin_assets');
 

@@ -401,6 +401,60 @@ function wppc_delete_post_meta($table_slug, $post_id, $meta_key, $meta_value = n
     return $result;
 }
 
+/**
+ * Automatically clean up custom postmeta records across all registered custom tables when a post is deleted.
+ *
+ * @param int $post_id The ID of the post being deleted.
+ * @return int Total number of custom meta records deleted across all tables.
+ */
+function wppc_cleanup_custom_meta_on_delete_post($post_id)
+{
+    global $wpdb;
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return 0;
+    }
+
+    $slugs = wppc_get_registered_slugs();
+    $total_deleted = 0;
+
+    foreach ($slugs as $slug) {
+        if (!wppc_table_exists($slug)) {
+            continue;
+        }
+
+        $table_name = wppc_get_table_name($slug);
+        $deleted = $wpdb->delete(
+            $table_name,
+            array('post_id' => $post_id),
+            array('%d')
+        );
+
+        if ($deleted !== false && $deleted > 0) {
+            $total_deleted += (int) $deleted;
+            /**
+             * Fires after custom post meta records for a specific post and table are deleted.
+             *
+             * @param string $slug    The table slug.
+             * @param int    $post_id The post ID.
+             * @param int    $deleted Number of records deleted.
+             */
+            do_action('wppc_cleaned_up_table_post_meta', $slug, $post_id, (int) $deleted);
+        }
+    }
+
+    /**
+     * Fires after custom post meta cleanup finishes for all registered tables.
+     *
+     * @param int   $post_id       The post ID.
+     * @param int   $total_deleted Total number of records deleted.
+     * @param array $slugs         Registered slugs processed.
+     */
+    do_action('wppc_cleaned_up_post_custom_meta', $post_id, $total_deleted, $slugs);
+
+    return $total_deleted;
+}
+
 function wppc_get_allowed_meta_compare_ops()
 {
     return array(
