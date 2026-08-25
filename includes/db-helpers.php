@@ -402,6 +402,240 @@ function wppc_delete_post_meta($table_slug, $post_id, $meta_key, $meta_value = n
 }
 
 /**
+ * Retrieve all meta key-value pairs for a specific post from a custom table.
+ *
+ * @param string $table_slug The custom table slug.
+ * @param int    $post_id    The post ID.
+ * @return array Associative array of meta_key => meta_value.
+ */
+function wppc_get_post_custom($table_slug, $post_id)
+{
+    global $wpdb;
+    $table_slug = wppc_normalize_slug($table_slug);
+    $post_id = absint($post_id);
+
+    if ($post_id <= 0 || $table_slug === '') {
+        return array();
+    }
+
+    if (!wppc_table_exists($table_slug)) {
+        return array();
+    }
+
+    $table_name = wppc_get_table_name($table_slug);
+    $table_sql = wppc_escape_identifier($table_name);
+
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT meta_key, meta_value FROM {$table_sql} WHERE post_id = %d ORDER BY meta_id ASC",
+            $post_id
+        ),
+        ARRAY_A
+    );
+
+    $custom_meta = array();
+    if (!empty($rows) && is_array($rows)) {
+        foreach ($rows as $row) {
+            if (isset($row['meta_key'])) {
+                $custom_meta[$row['meta_key']] = isset($row['meta_value']) ? (string) $row['meta_value'] : '';
+            }
+        }
+    }
+
+    return $custom_meta;
+}
+
+/**
+ * Retrieve a batch of specific meta keys for a post from a custom table.
+ *
+ * @param string $table_slug The custom table slug.
+ * @param int    $post_id    The post ID.
+ * @param array  $meta_keys  List of meta keys to retrieve.
+ * @return array Associative array of found meta_key => meta_value.
+ */
+function wppc_get_post_meta_batch($table_slug, $post_id, array $meta_keys)
+{
+    global $wpdb;
+    $table_slug = wppc_normalize_slug($table_slug);
+    $post_id = absint($post_id);
+
+    if ($post_id <= 0 || $table_slug === '' || empty($meta_keys)) {
+        return array();
+    }
+
+    if (!wppc_table_exists($table_slug)) {
+        return array();
+    }
+
+    $normalized_keys = array();
+    foreach ($meta_keys as $key) {
+        $norm = wppc_normalize_meta_key($key);
+        if ($norm !== '') {
+            $normalized_keys[] = $norm;
+        }
+    }
+
+    $normalized_keys = array_values(array_unique($normalized_keys));
+    if (empty($normalized_keys)) {
+        return array();
+    }
+
+    $table_name = wppc_get_table_name($table_slug);
+    $table_sql = wppc_escape_identifier($table_name);
+    $placeholders = implode(',', array_fill(0, count($normalized_keys), '%s'));
+
+    $sql = $wpdb->prepare(
+        "SELECT meta_key, meta_value FROM {$table_sql} WHERE post_id = %d AND meta_key IN ({$placeholders}) ORDER BY meta_id ASC",
+        array_merge(array($post_id), $normalized_keys)
+    );
+
+    $rows = $wpdb->get_results($sql, ARRAY_A);
+    $results = array();
+    if (!empty($rows) && is_array($rows)) {
+        foreach ($rows as $row) {
+            if (isset($row['meta_key'])) {
+                $results[$row['meta_key']] = isset($row['meta_value']) ? (string) $row['meta_value'] : '';
+            }
+        }
+    }
+
+    return $results;
+}
+
+/**
+ * Update or insert multiple meta key-value pairs for a post in a custom table in batch.
+ *
+ * @param string $table_slug The custom table slug.
+ * @param int    $post_id    The post ID.
+ * @param array  $meta_data  Associative array of meta_key => meta_value.
+ * @return array Status array with 'updated' count and list of 'keys'.
+ */
+function wppc_update_post_meta_batch($table_slug, $post_id, array $meta_data)
+{
+    global $wpdb;
+    $table_slug = wppc_normalize_slug($table_slug);
+    $post_id = absint($post_id);
+
+    if ($table_slug === '' || $post_id <= 0 || empty($meta_data)) {
+        return array('updated' => 0, 'keys' => array());
+    }
+
+    if (!wppc_table_exists($table_slug)) {
+        $create_result = wppc_create_meta_table($table_slug);
+        if (is_wp_error($create_result)) {
+            return array('updated' => 0, 'keys' => array(), 'error' => $create_result->get_error_message());
+        }
+    }
+
+    $table_name = wppc_get_table_name($table_slug);
+    $updated_keys = array();
+
+    $wpdb->query('START TRANSACTION');
+
+    foreach ($meta_data as $raw_key => $raw_value) {
+        $meta_key = wppc_normalize_meta_key($raw_key);
+        if ($meta_key === '') {
+            continue;
+        }
+
+        $stored_value = wppc_prepare_meta_value_for_store($raw_value);
+        $stored_value = apply_filters('wppc_pre_update_meta_value', $stored_value, $table_slug, $post_id, $meta_key, $raw_value);
+
+        $success = wppc_upsert_meta_row($table_name, $post_id, $meta_key, $stored_value);
+        if ($success) {
+            $updated_keys[] = $meta_key;
+            do_action('wppc_updated_post_meta', $table_slug, $post_id, $meta_key, $stored_value);
+        }
+    }
+
+    $wpdb->query('COMMIT');
+
+    if (!empty($updated_keys)) {
+        /**
+         * Fires after a batch of post meta has been updated.
+         *
+         * @param string $table_slug   The table slug.
+         * @param int    $post_id      The post ID.
+         * @param array  $updated_keys List of updated meta keys.
+         */
+        do_action('wppc_updated_post_meta_batch', $table_slug, $post_id, $updated_keys);
+    }
+
+    return array(
+        'updated' => count($updated_keys),
+        'keys' => $updated_keys,
+    );
+}
+
+/**
+ * Delete multiple meta keys for a post from a custom table in a single batch query.
+ *
+ * @param string $table_slug The custom table slug.
+ * @param int    $post_id    The post ID.
+ * @param array  $meta_keys  List of meta keys to delete.
+ * @return int Number of deleted records.
+ */
+function wppc_delete_post_meta_batch($table_slug, $post_id, array $meta_keys)
+{
+    global $wpdb;
+    $table_slug = wppc_normalize_slug($table_slug);
+    $post_id = absint($post_id);
+
+    if ($table_slug === '' || $post_id <= 0 || empty($meta_keys)) {
+        return 0;
+    }
+
+    if (!wppc_table_exists($table_slug)) {
+        return 0;
+    }
+
+    $normalized_keys = array();
+    foreach ($meta_keys as $key) {
+        $norm = wppc_normalize_meta_key($key);
+        if ($norm !== '') {
+            $normalized_keys[] = $norm;
+        }
+    }
+
+    $normalized_keys = array_values(array_unique($normalized_keys));
+    if (empty($normalized_keys)) {
+        return 0;
+    }
+
+    $table_name = wppc_get_table_name($table_slug);
+    $table_sql = wppc_escape_identifier($table_name);
+    $placeholders = implode(',', array_fill(0, count($normalized_keys), '%s'));
+
+    $sql = $wpdb->prepare(
+        "DELETE FROM {$table_sql} WHERE post_id = %d AND meta_key IN ({$placeholders})",
+        array_merge(array($post_id), $normalized_keys)
+    );
+
+    $deleted = $wpdb->query($sql);
+    if ($deleted === false) {
+        return 0;
+    }
+
+    $deleted_count = (int) $deleted;
+    if ($deleted_count > 0) {
+        foreach ($normalized_keys as $key) {
+            do_action('wppc_deleted_post_meta', $table_slug, $post_id, $key);
+        }
+        /**
+         * Fires after a batch of post meta keys has been deleted.
+         *
+         * @param string $table_slug      The table slug.
+         * @param int    $post_id         The post ID.
+         * @param array  $normalized_keys List of meta keys deleted.
+         * @param int    $deleted_count   Total rows deleted.
+         */
+        do_action('wppc_deleted_post_meta_batch', $table_slug, $post_id, $normalized_keys, $deleted_count);
+    }
+
+    return $deleted_count;
+}
+
+/**
  * Automatically clean up custom postmeta records across all registered custom tables when a post is deleted.
  *
  * @param int $post_id The ID of the post being deleted.

@@ -1,6 +1,6 @@
 # WP Table Postmeta Custom
 
-เวอร์ชัน: `1.0.0`
+เวอร์ชัน: `1.1.0`
 
 ปลั๊กอิน WordPress สำหรับสร้างและใช้งานตาราง `postmeta` แยกตาม `slug` เช่น `product`, `seo_data`, `campaign2026` เพื่อแยกกลุ่มข้อมูลออกจาก `wp_postmeta` หลัก และมีเครื่องมือหลังบ้านสำหรับจัดการตาราง, index, import/export และ sync ข้อมูล
 
@@ -14,6 +14,10 @@
 wppc_get_post_meta()
 wppc_update_post_meta()
 wppc_delete_post_meta()
+wppc_get_post_custom()
+wppc_get_post_meta_batch()
+wppc_update_post_meta_batch()
+wppc_delete_post_meta_batch()
 ```
 
 ค่า `meta_value` จะถูกเก็บและอ่านกลับเป็น string เสมอ ถ้าส่ง array/object เข้าไป ระบบจะแปลงเป็น JSON string ก่อนบันทึก
@@ -303,6 +307,62 @@ wppc_delete_post_meta('product', 123, 'color');
 
 ```php
 wppc_delete_post_meta('product', 123, 'color', 'blue');
+```
+
+### อ่าน meta ทั้งหมดของโพสต์ (Batch Custom Meta)
+
+```php
+wppc_get_post_custom($table_slug, $post_id);
+```
+
+ตัวอย่าง:
+
+```php
+$all_meta = wppc_get_post_custom('product', 123);
+// ได้ผลลัพธ์เป็น associative array: array('price' => '199.50', 'color' => 'blue', ...)
+```
+
+### อ่านเฉพาะชุด key ที่ระบุแบบ Batch
+
+```php
+wppc_get_post_meta_batch($table_slug, $post_id, array $meta_keys);
+```
+
+ตัวอย่าง:
+
+```php
+$meta = wppc_get_post_meta_batch('product', 123, array('price', 'color'));
+// ได้ผลลัพธ์: array('price' => '199.50', 'color' => 'blue')
+```
+
+### เพิ่มหรืออัปเดตข้อมูลแบบ Batch (Transaction)
+
+```php
+wppc_update_post_meta_batch($table_slug, $post_id, array $meta_data);
+```
+
+ตัวอย่าง:
+
+```php
+$result = wppc_update_post_meta_batch('product', 123, array(
+    'price' => '250.00',
+    'color' => 'red',
+    'sku'   => 'SKU-RED-123',
+));
+// $result = array('updated' => 3, 'keys' => array('price', 'color', 'sku'))
+```
+
+### ลบข้อมูลชุด key แบบ Batch
+
+```php
+wppc_delete_post_meta_batch($table_slug, $post_id, array $meta_keys);
+```
+
+ตัวอย่าง:
+
+```php
+$deleted_count = wppc_delete_post_meta_batch('product', 123, array('color', 'sku'));
+// คืนค่าจำนวนแถวที่ถูกลบจริง
 ```
 
 ## WP_Query

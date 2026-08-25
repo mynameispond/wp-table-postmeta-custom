@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Table Postmeta Custom
  * Description: จัดการหลายตาราง postmeta แบบกำหนด slug ได้ พร้อมรองรับ meta_query_wppc-{table_slug} ใน WP_Query
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Peera
  * Text Domain: wp-table-postmeta-custom
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WPPC_VERSION', '1.0.0');
+define('WPPC_VERSION', '1.1.0');
 define('WPPC_TABLE_REGISTRY_OPTION', 'wppc_table_registry');
 define('WPPC_SYNC_STATE_OPTION', 'wppc_sync_state');
 
