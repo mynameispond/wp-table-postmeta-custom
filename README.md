@@ -1,6 +1,6 @@
 # WP Table Postmeta Custom
 
-เวอร์ชัน: `1.1.0`
+เวอร์ชัน: `1.2.0`
 
 ปลั๊กอิน WordPress สำหรับสร้างและใช้งานตาราง `postmeta` แยกตาม `slug` เช่น `product`, `seo_data`, `campaign2026` เพื่อแยกกลุ่มข้อมูลออกจาก `wp_postmeta` หลัก และมีเครื่องมือหลังบ้านสำหรับจัดการตาราง, index, import/export และ sync ข้อมูล
 
@@ -50,7 +50,7 @@ $query = new WP_Query(array(
 
 - สร้างตาราง custom postmeta ได้หลายตารางในรูปแบบ `{$wpdb->prefix}postmeta_<slug>`
 - สร้างและลบตารางจากหน้า admin ได้
-- จัดการข้อมูลในตารางได้จากหน้า admin: เพิ่ม, แก้ไข, ลบ, ค้นหาตาม `post_id` และ `meta_key`, แบ่งหน้า
+- จัดการข้อมูลในตาราง custom และ `wp_postmeta` หลักได้จากหน้า admin: เพิ่ม, แก้ไข, ลบทีละรายการ, ค้นหาตาม `post_id`, `meta_key`, `meta_value` และแบ่งหน้า
 - อ่าน/เขียน/ลบ meta ผ่าน helper API กลางชุด `wppc_*`
 - บังคับ unique key ระหว่าง `post_id` และ `meta_key`
 - Query post จากตาราง custom ผ่าน `WP_Query`
@@ -206,7 +206,8 @@ Tools > WP Postmeta Custom
 
 - `ภาพรวม`: แสดงจำนวนตาราง, จำนวนแถวรวม และ version
 - `รายการประเภทตาราง`: สร้างและลบตารางตาม slug
-- `จัดการข้อมูลตาราง`: เพิ่ม/แก้ไข/ลบข้อมูล, index, import/export และ sync
+- `จัดการข้อมูล`: เลือกตาราง custom หรือ `wp_postmeta` หลักเพื่อค้นหาและจัดการข้อมูล
+- `นำเข้า/ส่งออก`: ย้ายข้อมูลด้วยไฟล์ CSV/JSON ระหว่างตาราง custom และตารางหลัก
 
 ## การสร้างตารางใหม่
 
@@ -496,12 +497,22 @@ $query = new WP_Query(array(
 
 ## ค้นหาข้อมูลหลังบ้าน
 
-หน้า `จัดการข้อมูลตาราง` มีช่องค้นหาแยกกัน:
+หน้า `จัดการข้อมูล` มีแท็บ `wp_postmeta หลัก` และแท็บของตาราง custom แต่ละ slug พร้อมช่องค้นหาแยกกัน:
 
 - `post_id`: ค้นหาแบบตรงตัว
 - `meta_key`: ค้นหาแบบ partial match ด้วย `LIKE`
+- `meta_value`: ค้นหาแบบ partial match ด้วย `LIKE`
 
-ถ้ากรอกทั้งสองช่อง ระบบจะใช้เงื่อนไขแบบ `AND`
+ถ้ากรอกหลายช่อง ระบบจะใช้เงื่อนไขแบบ `AND` และแสดงผลหน้าละ 20 รายการ โดยเรียง `meta_id` จากใหม่ไปเก่า
+
+สำหรับ `wp_postmeta` หลัก:
+
+- ต้องระบุคำค้นอย่างน้อยหนึ่งช่อง ระบบจะไม่สแกนทั้งตารางทันทีเมื่อเปิดแท็บ
+- เพิ่มข้อมูลได้เฉพาะ post ที่มีอยู่และผู้ใช้มีสิทธิ์แก้ไข
+- WordPress อนุญาตให้ post เดียวมี `meta_key` ซ้ำกันได้ การเพิ่มจากหน้านี้จึงไม่บังคับ unique key
+- แก้ไขได้ทีละรายการ โดย `post_id` ถูกล็อกหลังสร้าง และแก้ได้เฉพาะ `meta_key` กับ `meta_value`
+- ลบได้ทีละรายการ ไม่มี bulk delete และไม่มีคำสั่งล้างข้อมูลทั้งตาราง
+- ค่า string/scalar และ JSON string แก้ไขได้ ส่วนค่า PHP serialized สามารถค้นหาและลบได้ แต่ไม่อนุญาตให้เพิ่มหรือแก้ไขจาก textarea เพื่อป้องกันข้อมูลเสียรูป
 
 ## Index Manager
 
@@ -648,6 +659,9 @@ CSV จะอ่านทุกค่าเป็น string ตามเนื�
 
 - ทุกหน้า admin ตรวจ `current_user_can('manage_options')`
 - ทุก action admin ใช้ nonce ผ่าน `check_admin_referer()`
+- ทุก AJAX action ตรวจ nonce และ capability แยกกัน
+- แหล่งข้อมูลยอมรับเฉพาะ `custom` หรือ `main` และชื่อตารางหลักมาจาก `$wpdb->postmeta` ฝั่งเซิร์ฟเวอร์
+- การเพิ่ม แก้ไข และลบทีละรายการใน Data Manager ของ `wp_postmeta` หลักตรวจสิทธิ์ของ post เป้าหมาย และใช้ WordPress Metadata API เพื่อรักษา hooks กับ object cache
 - slug ถูก validate ด้วย regex
 - table name และ index name ถูก escape เป็น SQL identifier
 - input จาก admin ใช้ `wp_unslash()` และ sanitize ตามชนิดข้อมูล
@@ -681,6 +695,8 @@ assets/wppc-admin.css
 
 - ปลั๊กอินไม่สร้างตาราง custom อัตโนมัติ ต้องสร้าง slug ก่อน
 - ตาราง custom ไม่ sync อัตโนมัติกับ `wp_postmeta`
+- การค้น `meta_key` หรือ `meta_value` แบบ partial match บน `wp_postmeta` ขนาดใหญ่อาจช้า โดยเฉพาะคำค้นที่ไม่ระบุ `post_id`
+- หน้า Data Manager ไม่รองรับการเพิ่มหรือแก้ไขค่า PHP serialized ใน `wp_postmeta` หลัก
 - Query ผ่าน `meta_query_wppc-{table_slug}` สร้าง SQL ด้วย `EXISTS` subquery ไม่ได้ join table แบบ WordPress core meta query
 - Export ตารางขนาดใหญ่มากอาจใช้ memory สูง เพราะโหลดข้อมูลทั้งตารางก่อน stream
 
@@ -716,19 +732,9 @@ $query = new WP_Query(array(
 
 5. Export backup ก่อน import/sync ข้อมูลจำนวนมาก
 
-## Changelog
+## ประวัติการเปลี่ยนแปลง
 
-### 1.0.0
-
-- ไม่สร้าง `postmeta_wppc` อัตโนมัติหลัง activate
-- ใช้ helper API กลางชุด `wppc_*` เป็นมาตรฐานเดียวสำหรับอ่าน/เขียน/ลบ meta
-- เปลี่ยน WP_Query argument เป็น `meta_query_wppc-{table_slug}`
-- บังคับ unique key ระหว่าง `post_id` และ `meta_key`
-- ตัดระบบ schema ต่อ `meta_key` ออก
-- เก็บ `meta_value` เป็น string เสมอ และแปลง array/object เป็น JSON string ก่อนบันทึก
-- `wppc_get_post_meta()` คืน raw string จากฐานข้อมูลเสมอ
-- ตัด `meta_value_storage` ออกจาก import/export
-- แยกช่องค้นหาหลังบ้านเป็น `post_id` และ `meta_key`
+ดูรายการเปลี่ยนแปลงทั้งหมดได้ที่ [CHANGELOG.md](CHANGELOG.md)
 
 ## คำแนะนำก่อนใช้งานจริง
 

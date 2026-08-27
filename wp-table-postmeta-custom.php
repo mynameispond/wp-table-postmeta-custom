@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Table Postmeta Custom
  * Description: จัดการหลายตาราง postmeta แบบกำหนด slug ได้ พร้อมรองรับ meta_query_wppc-{table_slug} ใน WP_Query
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Peera
  * Text Domain: wp-table-postmeta-custom
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WPPC_VERSION', '1.1.0');
+define('WPPC_VERSION', '1.2.0');
 define('WPPC_TABLE_REGISTRY_OPTION', 'wppc_table_registry');
 define('WPPC_SYNC_STATE_OPTION', 'wppc_sync_state');
 
@@ -50,6 +50,7 @@ function wppc_enqueue_admin_assets()
     wp_localize_script('wppc-admin-js', 'wppc_params', array(
         'ajax_url' => admin_url('admin-ajax.php'),
         'active_slug' => wppc_get_admin_active_slug(),
+        'active_source' => wppc_get_admin_active_source(),
         'nonces' => array(
             'create_table' => wp_create_nonce('wppc_create_table'),
             'delete_table' => wp_create_nonce('wppc_delete_table'),
@@ -78,6 +79,12 @@ function wppc_handle_admin_actions()
 
     $slug = wppc_get_admin_active_slug();
     $slugs = wppc_get_registered_slugs();
+    $source = isset($_POST['source'])
+        ? wppc_normalize_data_source(wp_unslash($_POST['source']))
+        : 'custom';
+    $data_manager_args = $source === 'main'
+        ? array('source' => 'main')
+        : array('source' => 'custom', 'table' => $slug);
 
     switch ($action) {
         case 'create_table':
@@ -115,22 +122,48 @@ function wppc_handle_admin_actions()
         case 'save_record':
             check_admin_referer('wppc_save_record');
             $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
-            if (!in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก');
+            if ($source === '' || !wppc_is_data_source_action_allowed($source, 'save_record')) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'แหล่งข้อมูลหรือการทำงานไม่ถูกต้อง');
+            }
+            if ($source === 'custom' && !in_array($slug, $slugs, true)) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก', $data_manager_args);
             }
 
-            $meta_id = isset($_POST['meta_id']) ? absint($_POST['meta_id']) : 0;
-            $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
-            $meta_key = isset($_POST['meta_key']) ? wppc_normalize_meta_key(wp_unslash($_POST['meta_key'])) : '';
+            $meta_id_value = isset($_POST['meta_id']) ? wp_unslash($_POST['meta_id']) : 0;
+            $post_id_value = isset($_POST['post_id']) ? wp_unslash($_POST['post_id']) : 0;
+            $meta_id = $source === 'main' ? wppc_normalize_main_postmeta_id($meta_id_value) : absint($meta_id_value);
+            $post_id = $source === 'main' ? wppc_normalize_main_postmeta_id($post_id_value) : absint($post_id_value);
+            $meta_key_input = isset($_POST['meta_key']) ? wp_unslash($_POST['meta_key']) : '';
             $meta_value = isset($_POST['meta_value']) ? wp_unslash($_POST['meta_value']) : '';
+
+            if (
+                $source === 'main'
+                && array_key_exists('meta_id', $_POST)
+                && !wppc_is_main_postmeta_new_id($meta_id_value)
+                && $meta_id <= 0
+            ) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'meta_id สำหรับแก้ไขไม่ถูกต้อง', $data_manager_args);
+            }
+
+            if ($source === 'main') {
+                $result = $meta_id > 0
+                    ? wppc_update_main_postmeta_record($meta_id, $meta_key_input, $meta_value)
+                    : wppc_add_main_postmeta_record($post_id, $meta_key_input, $meta_value);
+                if (is_wp_error($result)) {
+                    wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $result->get_error_message(), $data_manager_args);
+                }
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'บันทึกข้อมูลเรียบร้อย', $data_manager_args);
+            }
+
+            $meta_key = wppc_normalize_meta_key($meta_key_input);
             if ($post_id <= 0 || $meta_key === '') {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'กรุณากรอก post_id และ meta_key ให้ครบ', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'กรุณากรอก post_id และ meta_key ให้ครบ', $data_manager_args);
             }
 
             if (!wppc_table_exists($slug)) {
                 $created = wppc_create_meta_table($slug);
                 if (is_wp_error($created)) {
-                    wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $created->get_error_message(), array('table' => $slug));
+                    wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $created->get_error_message(), $data_manager_args);
                 }
             }
 
@@ -161,28 +194,45 @@ function wppc_handle_admin_actions()
             }
 
             if ($result === false) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'บันทึกข้อมูลไม่สำเร็จ', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'บันทึกข้อมูลไม่สำเร็จ', $data_manager_args);
             }
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'บันทึกข้อมูลเรียบร้อย', array('table' => $slug));
+            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'บันทึกข้อมูลเรียบร้อย', $data_manager_args);
             break;
 
         case 'delete_record':
             check_admin_referer('wppc_delete_record');
             $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
-            $meta_id = isset($_POST['meta_id']) ? absint($_POST['meta_id']) : 0;
-            if ($meta_id <= 0 || !in_array($slug, $slugs, true)) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ข้อมูลสำหรับลบไม่ถูกต้อง', array('table' => $slug));
+            $meta_id_value = isset($_POST['meta_id']) ? wp_unslash($_POST['meta_id']) : 0;
+            $meta_id = $source === 'main' ? wppc_normalize_main_postmeta_id($meta_id_value) : absint($meta_id_value);
+            if ($source === '' || !wppc_is_data_source_action_allowed($source, 'delete_record')) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'แหล่งข้อมูลหรือการทำงานไม่ถูกต้อง');
+            }
+            if ($meta_id <= 0 || ($source === 'custom' && !in_array($slug, $slugs, true))) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ข้อมูลสำหรับลบไม่ถูกต้อง', $data_manager_args);
+            }
+            if ($source === 'main') {
+                $deleted = wppc_delete_main_postmeta_record($meta_id);
+                if (is_wp_error($deleted)) {
+                    wppc_admin_redirect_with_notice('wppc-data-manager', 'error', $deleted->get_error_message(), $data_manager_args);
+                }
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'ลบข้อมูลเรียบร้อย', $data_manager_args);
             }
             $table_name = wppc_get_table_name($slug);
             $deleted = $wpdb->delete($table_name, array('meta_id' => $meta_id), array('%d'));
             if ($deleted === false) {
-                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ลบข้อมูลไม่สำเร็จ', array('table' => $slug));
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ลบข้อมูลไม่สำเร็จ', $data_manager_args);
             }
-            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'ลบข้อมูลเรียบร้อย', array('table' => $slug));
+            wppc_admin_redirect_with_notice('wppc-data-manager', 'success', 'ลบข้อมูลเรียบร้อย', $data_manager_args);
             break;
 
         case 'bulk_delete':
             check_admin_referer('wppc_bulk_delete');
+            if ($source === 'main') {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ตาราง wp_postmeta หลักไม่รองรับการลบหลายรายการ', $data_manager_args);
+            }
+            if ($source === '' || !wppc_is_data_source_action_allowed($source, 'bulk_delete')) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'แหล่งข้อมูลหรือการทำงานไม่ถูกต้อง');
+            }
             $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
             if (!in_array($slug, $slugs, true)) {
                 wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก', array('table' => $slug));
@@ -205,6 +255,12 @@ function wppc_handle_admin_actions()
 
         case 'truncate_table':
             check_admin_referer('wppc_truncate_table');
+            if ($source === 'main') {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ตาราง wp_postmeta หลักไม่รองรับการล้างข้อมูลทั้งตาราง', $data_manager_args);
+            }
+            if ($source === '' || !wppc_is_data_source_action_allowed($source, 'truncate_table')) {
+                wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'แหล่งข้อมูลหรือการทำงานไม่ถูกต้อง');
+            }
             $slug = isset($_POST['table']) ? wppc_normalize_slug(wp_unslash($_POST['table'])) : $slug;
             if (!in_array($slug, $slugs, true)) {
                 wppc_admin_redirect_with_notice('wppc-data-manager', 'error', 'ไม่พบตารางที่เลือก', array('table' => $slug));

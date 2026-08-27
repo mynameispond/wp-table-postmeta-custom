@@ -60,6 +60,21 @@ function wppc_get_admin_active_slug()
     return isset($slugs[0]) ? $slugs[0] : '';
 }
 
+function wppc_get_admin_active_source()
+{
+    $slugs = wppc_get_registered_slugs();
+    $requested = isset($_REQUEST['source']) ? wppc_normalize_data_source(wp_unslash($_REQUEST['source'])) : '';
+
+    if ($requested === 'main') {
+        return 'main';
+    }
+    if ($requested === 'custom' && !empty($slugs)) {
+        return 'custom';
+    }
+
+    return empty($slugs) ? 'main' : 'custom';
+}
+
 function wppc_clamp_batch_size($batch_size)
 {
     $batch_size = absint($batch_size);
@@ -131,6 +146,23 @@ function wppc_render_slug_tabs($current_slug, $page)
     foreach ($slugs as $slug) {
         $active = $slug === $current_slug ? ' nav-tab-active' : '';
         echo '<a class="nav-tab' . esc_attr($active) . '" href="' . esc_url(wppc_admin_url($page, array('table' => $slug))) . '">' . esc_html($slug) . '</a>';
+    }
+    echo '</h2>';
+}
+
+function wppc_render_data_source_tabs($current_source, $current_slug, $page)
+{
+    $slugs = wppc_get_registered_slugs();
+    $main_active = $current_source === 'main' ? ' nav-tab-active' : '';
+
+    echo '<h2 class="nav-tab-wrapper wppc-nav-tab-wrapper">';
+    echo '<a class="nav-tab' . esc_attr($main_active) . '" href="' . esc_url(wppc_admin_url($page, array('source' => 'main'))) . '">wp_postmeta หลัก</a>';
+    foreach ($slugs as $slug) {
+        $active = $current_source === 'custom' && $slug === $current_slug ? ' nav-tab-active' : '';
+        echo '<a class="nav-tab' . esc_attr($active) . '" href="' . esc_url(wppc_admin_url($page, array(
+            'source' => 'custom',
+            'table' => $slug,
+        ))) . '">' . esc_html($slug) . '</a>';
     }
     echo '</h2>';
 }
@@ -223,53 +255,74 @@ function wppc_render_data_manager_page()
         wp_die(esc_html__('คุณไม่มีสิทธิ์เข้าถึงหน้านี้', 'wp-table-postmeta-custom'));
     }
 
+    $source = wppc_get_admin_active_source();
     $slug = wppc_get_admin_active_slug();
+    $data_slug = $source === 'main' ? '' : $slug;
     $post_id_filter = isset($_GET['filter_post_id']) ? sanitize_text_field(wp_unslash($_GET['filter_post_id'])) : '';
     $meta_key_filter = isset($_GET['filter_meta_key']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_key'])) : '';
     $meta_value_filter = isset($_GET['filter_meta_value']) ? sanitize_text_field(wp_unslash($_GET['filter_meta_value'])) : '';
     $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
     $edit_id = isset($_GET['edit_id']) ? absint($_GET['edit_id']) : 0;
-    $edit_row = $edit_id > 0 ? wppc_get_record_by_id($slug, $edit_id) : null;
+    $edit_row = $edit_id > 0 ? wppc_get_record_by_id($data_slug, $edit_id, $source) : null;
+    $edit_error = '';
+    if ($source === 'main' && $edit_row && !wppc_is_main_postmeta_value_editable($edit_row['meta_value'])) {
+        $edit_error = 'ไม่รองรับการแก้ไขค่า PHP serialized จากหน้านี้ แต่ยังสามารถค้นหาและลบรายการได้';
+        $edit_row = null;
+    }
 
     wppc_render_admin_page_header(
         'จัดการข้อมูล',
-        'เพิ่ม แก้ไข ลบ และค้นหาข้อมูลในแต่ละตาราง',
+        'เพิ่ม แก้ไข ลบทีละรายการ และค้นหาข้อมูลในตาราง custom หรือ wp_postmeta หลัก',
         'wppc-data-manager'
     );
-    wppc_render_slug_tabs($slug, 'wppc-data-manager');
+    wppc_render_data_source_tabs($source, $slug, 'wppc-data-manager');
 
-    if ($slug === '') {
+    if ($source === 'custom' && $slug === '') {
         echo '<div class="wppc-card"><h2>ยังไม่มีตาราง custom</h2><p>ให้สร้าง slug ที่หน้า รายการประเภทตาราง ก่อนเริ่มเพิ่มหรือค้นหาข้อมูล</p>';
         echo '<p><a class="button button-primary" href="' . esc_url(wppc_admin_url('wppc-table-types')) . '">ไปสร้างตาราง</a></p></div>';
         wppc_render_admin_page_footer();
         return;
     }
 
+    if ($edit_error !== '') {
+        echo '<div class="notice notice-warning inline"><p>' . esc_html($edit_error) . '</p></div>';
+    }
+
+    $source_args = $source === 'main'
+        ? array('source' => 'main')
+        : array('source' => 'custom', 'table' => $data_slug);
     echo '<div class="wppc-grid">';
     echo '<div class="wppc-card">';
-    echo '<h2>เพิ่ม/แก้ไขข้อมูล</h2>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '">';
+    echo '<h2>' . ($source === 'main' ? 'เพิ่ม/แก้ไขข้อมูล wp_postmeta หลัก' : 'เพิ่ม/แก้ไขข้อมูล') . '</h2>';
+    if ($source === 'main') {
+        echo '<p class="description">การแก้ไขรายการเดิมจะล็อก post_id และไม่รองรับค่า PHP serialized</p>';
+    }
+    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '">';
     wp_nonce_field('wppc_save_record');
     $meta_value_for_edit = $edit_row ? (string) $edit_row['meta_value'] : '';
     echo '<input type="hidden" name="page" value="wppc-data-manager">';
     echo '<input type="hidden" name="wppc_action" value="save_record">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+    echo '<input type="hidden" name="source" value="' . esc_attr($source) . '">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($data_slug) . '">';
     echo '<input type="hidden" name="meta_id" value="' . esc_attr($edit_row ? $edit_row['meta_id'] : 0) . '">';
     echo '<table class="form-table"><tbody>';
-    echo '<tr><th><label for="wppc_post_id">รหัสโพสต์ (post_id)</label></th><td><input id="wppc_post_id" name="post_id" type="number" min="1" required value="' . esc_attr($edit_row ? $edit_row['post_id'] : '') . '" class="regular-text"></td></tr>';
-    echo '<tr><th><label for="wppc_meta_key">คีย์ข้อมูล (meta_key)</label></th><td><input id="wppc_meta_key" name="meta_key" type="text" required value="' . esc_attr($edit_row ? $edit_row['meta_key'] : '') . '" class="regular-text"></td></tr>';
+    $post_id_readonly = $source === 'main' && $edit_row ? ' readonly' : '';
+    $meta_key_maxlength = $source === 'main' ? 255 : 191;
+    echo '<tr><th><label for="wppc_post_id">รหัสโพสต์ (post_id)</label></th><td><input id="wppc_post_id" name="post_id" type="number" min="1" required value="' . esc_attr($edit_row ? $edit_row['post_id'] : '') . '" class="regular-text"' . $post_id_readonly . '></td></tr>';
+    echo '<tr><th><label for="wppc_meta_key">คีย์ข้อมูล (meta_key)</label></th><td><input id="wppc_meta_key" name="meta_key" type="text" maxlength="' . esc_attr($meta_key_maxlength) . '" required value="' . esc_attr($edit_row ? $edit_row['meta_key'] : '') . '" class="regular-text"></td></tr>';
     echo '<tr><th><label for="wppc_meta_value">ค่าข้อมูล (meta_value)</label></th><td><textarea id="wppc_meta_value" name="meta_value" rows="6" class="large-text">' . esc_textarea((string) $meta_value_for_edit) . '</textarea></td></tr>';
     echo '</tbody></table>';
     submit_button($edit_row ? 'อัปเดตข้อมูล' : 'เพิ่มข้อมูล');
     if ($edit_row) {
-        echo '<a class="button wppc-cancel-edit" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ยกเลิกแก้ไข</a>';
+        echo '<a class="button wppc-cancel-edit" href="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '">ยกเลิกแก้ไข</a>';
     }
     echo '</form>';
     echo '</div>';
     echo '</div>';
 
     echo '<div id="wppc-data-table-container" class="wppc-loading-relative" style="min-height: 200px;"';
-    echo ' data-table="' . esc_attr($slug) . '"';
+    echo ' data-source="' . esc_attr($source) . '"';
+    echo ' data-table="' . esc_attr($data_slug) . '"';
     echo ' data-post-id="' . esc_attr($post_id_filter) . '"';
     echo ' data-meta-key="' . esc_attr($meta_key_filter) . '"';
     echo ' data-meta-value="' . esc_attr($meta_value_filter) . '"';
@@ -385,87 +438,132 @@ function wppc_render_import_export_page()
  * @param int $paged
  * @return string
  */
-function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged)
+function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged, $source = 'custom')
 {
+    $source = wppc_normalize_data_source($source);
+    if ($source === '') {
+        $source = 'custom';
+    }
+
+    $is_main = $source === 'main';
+    $table_slug = $is_main ? '' : $slug;
     $per_page = 20;
-    $records = wppc_get_table_records($slug, $post_id_filter, $meta_key_filter, $meta_value_filter, $paged, $per_page);
+    $records = wppc_get_table_records(
+        $table_slug,
+        $post_id_filter,
+        $meta_key_filter,
+        $meta_value_filter,
+        $paged,
+        $per_page,
+        $source
+    );
     $total_pages = max(1, (int) ceil($records['total'] / $per_page));
+    $source_args = $is_main
+        ? array('source' => 'main')
+        : array('source' => 'custom', 'table' => $table_slug);
 
     ob_start();
     echo '<div class="wppc-card">';
     echo '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-    echo '<h2 style="margin:0;">ข้อมูลในตาราง</h2>';
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" style="margin:0;">';
-    wp_nonce_field('wppc_truncate_table');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="truncate_table">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
-    echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง ' . esc_js($slug) . '? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
-    echo '</form>';
+    echo '<h2 style="margin:0;">' . ($is_main ? 'ข้อมูลใน wp_postmeta หลัก' : 'ข้อมูลในตาราง') . '</h2>';
+    if (!$is_main) {
+        echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '" style="margin:0;">';
+        wp_nonce_field('wppc_truncate_table');
+        echo '<input type="hidden" name="page" value="wppc-data-manager">';
+        echo '<input type="hidden" name="wppc_action" value="truncate_table">';
+        echo '<input type="hidden" name="source" value="custom">';
+        echo '<input type="hidden" name="table" value="' . esc_attr($table_slug) . '">';
+        echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการล้างข้อมูลทั้งหมดในตาราง ' . esc_js($table_slug) . '? การกระทำนี้ไม่สามารถย้อนกลับได้\');">ล้างข้อมูลทั้งตาราง</button>';
+        echo '</form>';
+    }
     echo '</div>';
 
     echo '<form method="get" action="' . esc_url(admin_url('tools.php')) . '" class="wppc-inline-actions" style="margin-bottom:10px;">';
-    echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+    echo '<input type="hidden" name="page" value="wppc-data-manager">';
+    echo '<input type="hidden" name="source" value="' . esc_attr($source) . '">';
+    echo '<input type="hidden" name="table" value="' . esc_attr($table_slug) . '">';
     echo '<input type="number" name="filter_post_id" min="1" value="' . esc_attr($post_id_filter) . '" placeholder="post_id" style="width:120px;"> ';
     echo '<input type="search" name="filter_meta_key" value="' . esc_attr($meta_key_filter) . '" placeholder="meta_key"> ';
     echo '<input type="search" name="filter_meta_value" value="' . esc_attr($meta_value_filter) . '" placeholder="meta_value"> ';
     echo '<button type="submit" class="button">ค้นหา</button> ';
     if ($post_id_filter !== '' || $meta_key_filter !== '' || $meta_value_filter !== '') {
-        echo '<a class="button wppc-clear-search" href="' . esc_url(wppc_admin_url('wppc-data-manager', array('table' => $slug))) . '">ล้างคำค้น</a>';
+        echo '<a class="button wppc-clear-search" href="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '">ล้างคำค้น</a>';
     }
     echo '</form>';
 
-    // Bulk delete form wrapping the table
-    echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-bulk-form">';
-    wp_nonce_field('wppc_bulk_delete');
-    echo '<input type="hidden" name="page" value="wppc-data-manager">';
-    echo '<input type="hidden" name="wppc_action" value="bulk_delete">';
-    echo '<input type="hidden" name="table" value="' . esc_attr($slug) . '">';
+    if (!$is_main) {
+        echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '" id="wppc-bulk-form">';
+        wp_nonce_field('wppc_bulk_delete');
+        echo '<input type="hidden" name="page" value="wppc-data-manager">';
+        echo '<input type="hidden" name="wppc_action" value="bulk_delete">';
+        echo '<input type="hidden" name="source" value="custom">';
+        echo '<input type="hidden" name="table" value="' . esc_attr($table_slug) . '">';
 
-    if (!empty($records['rows'])) {
-        echo '<div class="wppc-inline-actions" style="margin-bottom:8px;">';
-        echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการลบข้อมูลที่เลือก?\');">ลบที่เลือก</button> ';
-        echo '<label style="cursor:pointer;"><input type="checkbox" id="wppc-select-all"> เลือกทั้งหมด</label>';
-        echo '</div>';
+        if (!empty($records['rows'])) {
+            echo '<div class="wppc-inline-actions" style="margin-bottom:8px;">';
+            echo '<button type="submit" class="button button-link-delete" onclick="return confirm(\'ยืนยันการลบข้อมูลที่เลือก?\');">ลบที่เลือก</button> ';
+            echo '<label style="cursor:pointer;"><input type="checkbox" id="wppc-select-all"> เลือกทั้งหมด</label>';
+            echo '</div>';
+        }
     }
 
-    echo '<table class="widefat striped"><thead><tr><th style="width:40px;"><input type="checkbox" id="wppc-select-all-top"></th><th style="width:70px;">ID</th><th style="width:110px;">รหัสโพสต์</th><th style="width:220px;">คีย์ข้อมูล</th><th>ค่าข้อมูล</th><th style="width:160px;">การทำงาน</th></tr></thead><tbody>';
+    echo '<table class="widefat striped"><thead><tr>';
+    if (!$is_main) {
+        echo '<th style="width:40px;"><input type="checkbox" id="wppc-select-all-top"></th>';
+    }
+    echo '<th style="width:70px;">ID</th><th style="width:110px;">รหัสโพสต์</th><th style="width:220px;">คีย์ข้อมูล</th><th>ค่าข้อมูล</th><th style="width:180px;">การทำงาน</th></tr></thead><tbody>';
     if (empty($records['rows'])) {
-        echo '<tr><td colspan="6">ไม่พบข้อมูล</td></tr>';
+        $message = !empty($records['query_skipped'])
+            ? 'กรุณาระบุ post_id, meta_key หรือ meta_value อย่างน้อยหนึ่งช่องเพื่อค้นหา'
+            : 'ไม่พบข้อมูล';
+        echo '<tr><td colspan="' . ($is_main ? '5' : '6') . '">' . esc_html($message) . '</td></tr>';
     } else {
         foreach ($records['rows'] as $row) {
-            $row_value = (string) $row['meta_value'];
+            $raw_row_value = (string) $row['meta_value'];
+            $row_value = $raw_row_value;
             if (strlen($row_value) > 160) {
                 $row_value = substr($row_value, 0, 160) . '...';
             }
-            $edit_url = wppc_admin_url('wppc-data-manager', array(
-                'table' => $slug,
+            $edit_args = array_merge($source_args, array(
                 'paged' => $paged,
                 'filter_post_id' => $post_id_filter,
                 'filter_meta_key' => $meta_key_filter,
                 'filter_meta_value' => $meta_value_filter,
                 'edit_id' => $row['meta_id'],
             ));
+            $edit_url = wppc_admin_url('wppc-data-manager', $edit_args);
             echo '<tr>';
-            echo '<td><input type="checkbox" name="bulk_ids[]" value="' . esc_attr($row['meta_id']) . '" class="wppc-row-cb"></td>';
+            if (!$is_main) {
+                echo '<td><input type="checkbox" name="bulk_ids[]" value="' . esc_attr($row['meta_id']) . '" class="wppc-row-cb"></td>';
+            }
             echo '<td>' . esc_html($row['meta_id']) . '</td>';
             echo '<td>' . esc_html($row['post_id']) . '</td>';
             echo '<td><code>' . esc_html($row['meta_key']) . '</code></td>';
             echo '<td><code>' . esc_html($row_value) . '</code></td>';
-            echo '<td><a class="button button-small wppc-edit-record" href="' . esc_url($edit_url) . '" data-id="' . esc_attr($row['meta_id']) . '">แก้ไข</a> ';
-            echo '<button type="button" class="button button-small button-link-delete" onclick="if(confirm(\'ยืนยันการลบข้อมูลนี้?\')) { var f=document.getElementById(\'wppc-del-' . esc_attr($row['meta_id']) . '\'); f.submit(); }">ลบ</button></td>';
+            echo '<td>';
+            if (!$is_main || wppc_is_main_postmeta_value_editable($raw_row_value)) {
+                echo '<a class="button button-small wppc-edit-record" href="' . esc_url($edit_url) . '" data-id="' . esc_attr($row['meta_id']) . '">แก้ไข</a> ';
+            } else {
+                echo '<span class="button button-small disabled" title="ไม่รองรับการแก้ไขค่า PHP serialized">แก้ไขไม่ได้</span> ';
+            }
+            echo '<button type="button" class="button button-small button-link-delete wppc-delete-record" data-id="' . esc_attr($row['meta_id']) . '" onclick="if(confirm(\'ยืนยันการลบข้อมูลนี้?\')) { var f=document.getElementById(\'wppc-del-' . esc_attr($row['meta_id']) . '\'); f.submit(); }">ลบ</button></td>';
             echo '</tr>';
         }
     }
     echo '</tbody></table>';
-    echo '</form>';
+    if (!$is_main) {
+        echo '</form>';
+    }
 
-    // Individual delete forms (hidden, outside the bulk form to avoid nesting)
     if (!empty($records['rows'])) {
         foreach ($records['rows'] as $row) {
-            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager')) . '" id="wppc-del-' . esc_attr($row['meta_id']) . '" style="display:none;">';
+            echo '<form method="post" action="' . esc_url(wppc_admin_url('wppc-data-manager', $source_args)) . '" id="wppc-del-' . esc_attr($row['meta_id']) . '" style="display:none;">';
             wp_nonce_field('wppc_delete_record');
-            echo '<input type="hidden" name="page" value="wppc-data-manager"><input type="hidden" name="wppc_action" value="delete_record"><input type="hidden" name="table" value="' . esc_attr($slug) . '"><input type="hidden" name="meta_id" value="' . esc_attr($row['meta_id']) . '">';
+            echo '<input type="hidden" name="page" value="wppc-data-manager">';
+            echo '<input type="hidden" name="wppc_action" value="delete_record">';
+            echo '<input type="hidden" name="source" value="' . esc_attr($source) . '">';
+            echo '<input type="hidden" name="table" value="' . esc_attr($table_slug) . '">';
+            echo '<input type="hidden" name="meta_id" value="' . esc_attr($row['meta_id']) . '">';
             echo '</form>';
         }
     }
@@ -473,13 +571,12 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
     if ($total_pages > 1) {
         echo '<div class="tablenav"><div class="tablenav-pages" style="margin:12px 0;">';
         for ($i = 1; $i <= $total_pages; $i++) {
-            $page_url = wppc_admin_url('wppc-data-manager', array(
-                'table' => $slug,
+            $page_url = wppc_admin_url('wppc-data-manager', array_merge($source_args, array(
                 'filter_post_id' => $post_id_filter,
                 'filter_meta_key' => $meta_key_filter,
                 'filter_meta_value' => $meta_value_filter,
                 'paged' => $i,
-            ));
+            )));
             $class_attr = $i === $paged ? ' class="current"' : '';
             $style = $i === $paged ? ' style="font-weight:700;text-decoration:underline;"' : '';
             echo '<a' . $class_attr . $style . ' href="' . esc_url($page_url) . '">' . esc_html($i) . '</a> ';
@@ -487,6 +584,6 @@ function wppc_render_data_manager_table_html($slug, $post_id_filter, $meta_key_f
         echo '</div></div>';
     }
 
-    echo '</div>'; // wppc-card
+    echo '</div>';
     return ob_get_clean();
 }

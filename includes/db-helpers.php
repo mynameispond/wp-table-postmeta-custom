@@ -3,12 +3,53 @@ defined('ABSPATH') || exit;
 
 function wppc_normalize_slug($slug)
 {
+    if (!is_scalar($slug)) {
+        return '';
+    }
+
     $slug = strtolower(trim((string) $slug));
     if (!preg_match('/^[a-z][a-z0-9_]*$/', $slug)) {
         return '';
     }
 
     return $slug;
+}
+
+function wppc_normalize_data_source($source)
+{
+    if (!is_scalar($source)) {
+        return '';
+    }
+
+    $source = strtolower(trim((string) $source));
+    return in_array($source, array('custom', 'main'), true) ? $source : '';
+}
+
+function wppc_get_data_source_table_name($source, $slug = '')
+{
+    global $wpdb;
+    $source = wppc_normalize_data_source($source);
+
+    if ($source === 'main') {
+        return $wpdb->postmeta;
+    }
+    if ($source === 'custom') {
+        return wppc_get_table_name($slug);
+    }
+
+    return '';
+}
+
+function wppc_is_data_source_action_allowed($source, $action)
+{
+    $source = wppc_normalize_data_source($source);
+    $action = strtolower(trim((string) $action));
+    $allowed_actions = array(
+        'custom' => array('save_record', 'delete_record', 'bulk_delete', 'truncate_table'),
+        'main' => array('save_record', 'delete_record'),
+    );
+
+    return isset($allowed_actions[$source]) && in_array($action, $allowed_actions[$source], true);
 }
 
 function wppc_is_valid_slug($slug)
@@ -18,6 +59,10 @@ function wppc_is_valid_slug($slug)
 
 function wppc_normalize_meta_key($meta_key)
 {
+    if (!is_scalar($meta_key)) {
+        return '';
+    }
+
     $meta_key = sanitize_text_field(wp_unslash((string) $meta_key));
     $meta_key = trim($meta_key);
     if ($meta_key === '') {
@@ -29,6 +74,50 @@ function wppc_normalize_meta_key($meta_key)
     }
 
     return $meta_key;
+}
+
+function wppc_normalize_main_meta_key($meta_key)
+{
+    if (!is_scalar($meta_key)) {
+        return '';
+    }
+
+    $meta_key = trim(sanitize_text_field((string) $meta_key));
+    if ($meta_key === '') {
+        return '';
+    }
+
+    $length = function_exists('mb_strlen') ? mb_strlen($meta_key, 'UTF-8') : strlen($meta_key);
+    if ($length > 255) {
+        return '';
+    }
+
+    return $meta_key;
+}
+
+function wppc_normalize_main_postmeta_id($value)
+{
+    if (is_bool($value) || (!is_int($value) && !is_string($value))) {
+        return 0;
+    }
+
+    $value = (string) $value;
+    if ($value === '' || !preg_match('/^\d+$/', $value)) {
+        return 0;
+    }
+
+    $value = absint($value);
+    return $value > 0 ? $value : 0;
+}
+
+function wppc_is_main_postmeta_new_id($value)
+{
+    if (is_bool($value) || (!is_int($value) && !is_string($value))) {
+        return false;
+    }
+
+    $value = (string) $value;
+    return $value !== '' && preg_match('/^0+$/', $value) === 1;
 }
 
 function wppc_get_registered_slugs()
@@ -902,16 +991,22 @@ function wppc_get_table_row_count($slug)
     return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_sql}");
 }
 
-function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = '', $meta_value_filter = '', $paged = 1, $per_page = 20)
+function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = '', $meta_value_filter = '', $paged = 1, $per_page = 20, $source = 'custom')
 {
     global $wpdb;
-    $slug = wppc_normalize_slug($slug);
-    if ($slug === '') {
+    $source = wppc_normalize_data_source($source);
+    if ($source === '') {
         return array('rows' => array(), 'total' => 0);
     }
-    $table_name = wppc_get_table_name($slug);
+
+    $slug = wppc_normalize_slug($slug);
+    if ($source === 'custom' && $slug === '') {
+        return array('rows' => array(), 'total' => 0);
+    }
+
+    $table_name = wppc_get_data_source_table_name($source, $slug);
     $table_sql = wppc_escape_identifier($table_name);
-    if (!wppc_table_exists($slug)) {
+    if ($source === 'custom' && !wppc_table_exists($slug)) {
         return array('rows' => array(), 'total' => 0);
     }
 
@@ -921,6 +1016,11 @@ function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = 
     $post_id_filter = trim((string) $post_id_filter);
     $meta_key_filter = trim((string) $meta_key_filter);
     $meta_value_filter = trim((string) $meta_value_filter);
+
+    if ($source === 'main' && $post_id_filter === '' && $meta_key_filter === '' && $meta_value_filter === '') {
+        return array('rows' => array(), 'total' => 0, 'query_skipped' => true);
+    }
+
     $where_parts = array();
     $where_values = array();
 
@@ -951,19 +1051,23 @@ function wppc_get_table_records($slug, $post_id_filter = '', $meta_key_filter = 
         ARRAY_A
     );
 
-    return array('rows' => $rows, 'total' => $total);
+    return array('rows' => $rows, 'total' => $total, 'query_skipped' => false);
 }
 
-function wppc_get_record_by_id($slug, $meta_id)
+function wppc_get_record_by_id($slug, $meta_id, $source = 'custom')
 {
     global $wpdb;
+    $source = wppc_normalize_data_source($source);
     $slug = wppc_normalize_slug($slug);
-    $meta_id = absint($meta_id);
-    if ($slug === '' || $meta_id <= 0 || !wppc_table_exists($slug)) {
+    $meta_id = $source === 'main' ? wppc_normalize_main_postmeta_id($meta_id) : absint($meta_id);
+    if ($source === '' || $meta_id <= 0) {
+        return null;
+    }
+    if ($source === 'custom' && ($slug === '' || !wppc_table_exists($slug))) {
         return null;
     }
 
-    $table_name = wppc_get_table_name($slug);
+    $table_name = wppc_get_data_source_table_name($source, $slug);
     $table_sql = wppc_escape_identifier($table_name);
     return $wpdb->get_row(
         $wpdb->prepare(
@@ -972,6 +1076,120 @@ function wppc_get_record_by_id($slug, $meta_id)
         ),
         ARRAY_A
     );
+}
+
+function wppc_is_main_postmeta_value_editable($meta_value)
+{
+    return !is_serialized((string) $meta_value);
+}
+
+function wppc_validate_main_postmeta_target($post_id)
+{
+    $post_id = wppc_normalize_main_postmeta_id($post_id);
+    if ($post_id <= 0 || !get_post($post_id)) {
+        return new WP_Error('invalid_post', 'ไม่พบโพสต์ที่ต้องการจัดการข้อมูล');
+    }
+    if (!current_user_can('edit_post', $post_id)) {
+        return new WP_Error('forbidden_post', 'คุณไม่มีสิทธิ์แก้ไขข้อมูลของโพสต์นี้');
+    }
+
+    return $post_id;
+}
+
+function wppc_validate_main_postmeta_value($meta_value)
+{
+    if (!is_scalar($meta_value) && $meta_value !== null) {
+        return new WP_Error('invalid_meta_value', 'ค่าข้อมูลต้องเป็นข้อความเท่านั้น');
+    }
+
+    $meta_value = $meta_value === null ? '' : (string) $meta_value;
+    if (!wppc_is_main_postmeta_value_editable($meta_value)) {
+        return new WP_Error('serialized_meta_value', 'ไม่รองรับการเพิ่มหรือแก้ไขค่า PHP serialized จากหน้านี้');
+    }
+
+    return $meta_value;
+}
+
+function wppc_add_main_postmeta_record($post_id, $meta_key, $meta_value)
+{
+    $post_id = wppc_validate_main_postmeta_target($post_id);
+    if (is_wp_error($post_id)) {
+        return $post_id;
+    }
+
+    $meta_key = wppc_normalize_main_meta_key($meta_key);
+    if ($meta_key === '') {
+        return new WP_Error('invalid_meta_key', 'คีย์ข้อมูลไม่ถูกต้องหรือยาวเกิน 255 ตัวอักษร');
+    }
+
+    $meta_value = wppc_validate_main_postmeta_value($meta_value);
+    if (is_wp_error($meta_value)) {
+        return $meta_value;
+    }
+
+    $meta_id = add_metadata('post', $post_id, wp_slash($meta_key), wp_slash($meta_value), false);
+    if ($meta_id === false) {
+        return new WP_Error('add_meta_failed', 'เพิ่มข้อมูลในตารางหลักไม่สำเร็จ');
+    }
+
+    return (int) $meta_id;
+}
+
+function wppc_update_main_postmeta_record($meta_id, $meta_key, $meta_value)
+{
+    $meta_id = wppc_normalize_main_postmeta_id($meta_id);
+    $record = wppc_get_record_by_id('', $meta_id, 'main');
+    if (!$record) {
+        return new WP_Error('meta_not_found', 'ไม่พบข้อมูลที่ต้องการแก้ไข');
+    }
+
+    $post_id = wppc_validate_main_postmeta_target($record['post_id']);
+    if (is_wp_error($post_id)) {
+        return $post_id;
+    }
+    if (!wppc_is_main_postmeta_value_editable($record['meta_value'])) {
+        return new WP_Error('serialized_meta_value', 'ไม่รองรับการแก้ไขค่า PHP serialized จากหน้านี้');
+    }
+
+    $meta_key = wppc_normalize_main_meta_key($meta_key);
+    if ($meta_key === '') {
+        return new WP_Error('invalid_meta_key', 'คีย์ข้อมูลไม่ถูกต้องหรือยาวเกิน 255 ตัวอักษร');
+    }
+
+    $meta_value = wppc_validate_main_postmeta_value($meta_value);
+    if (is_wp_error($meta_value)) {
+        return $meta_value;
+    }
+
+    if ((string) $record['meta_key'] === $meta_key && (string) $record['meta_value'] === $meta_value) {
+        return true;
+    }
+
+    if (!update_metadata_by_mid('post', $meta_id, $meta_value, $meta_key)) {
+        return new WP_Error('update_meta_failed', 'แก้ไขข้อมูลในตารางหลักไม่สำเร็จ');
+    }
+
+    return true;
+}
+
+function wppc_delete_main_postmeta_record($meta_id)
+{
+    $meta_id = wppc_normalize_main_postmeta_id($meta_id);
+    $record = wppc_get_record_by_id('', $meta_id, 'main');
+    if (!$record) {
+        return new WP_Error('meta_not_found', 'ไม่พบข้อมูลที่ต้องการลบ');
+    }
+
+    $post_id = wppc_validate_main_postmeta_target($record['post_id']);
+    if (is_wp_error($post_id)) {
+        return $post_id;
+    }
+
+    if (!delete_metadata_by_mid('post', $meta_id)) {
+        return new WP_Error('delete_meta_failed', 'ลบข้อมูลจากตารางหลักไม่สำเร็จ');
+    }
+
+    return true;
 }
 
 function wppc_get_index_presets()

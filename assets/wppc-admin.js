@@ -162,6 +162,24 @@ jQuery(document).ready(function($) {
             $dataContainer.find('.button-link-delete').removeAttr('onclick');
         }
 
+        function getDataSource() {
+            return $dataContainer.find('input[name="source"]').val()
+                || $dataContainer.data('source')
+                || wppc_params.active_source
+                || 'custom';
+        }
+
+        function getDataTable() {
+            if (getDataSource() === 'main') {
+                return '';
+            }
+
+            return $dataContainer.find('input[name="table"]').val()
+                || $dataContainer.data('table')
+                || wppc_params.active_slug
+                || '';
+        }
+
         // Strip on load
         stripDataManagerOnclick();
 
@@ -208,11 +226,13 @@ jQuery(document).ready(function($) {
             var filterPostId = $formGet.find('input[name="filter_post_id"]').val();
             var filterMetaKey = $formGet.find('input[name="filter_meta_key"]').val();
             var filterMetaValue = $formGet.find('input[name="filter_meta_value"]').val();
-            var table = $formGet.find('input[name="table"]').val() || wppc_params.active_slug;
+            var source = $formGet.find('input[name="source"]').val() || getDataSource();
+            var table = $formGet.find('input[name="table"]').val() || getDataTable();
 
             fetchTable({
                 action: 'wppc_get_data_table',
                 nonce: wppc_params.nonces.get_data_table,
+                source: source,
                 table: table,
                 filter_post_id: filterPostId,
                 filter_meta_key: filterMetaKey,
@@ -231,11 +251,13 @@ jQuery(document).ready(function($) {
             var filterPostId = $dataContainer.find('input[name="filter_post_id"]').val() || '';
             var filterMetaKey = $dataContainer.find('input[name="filter_meta_key"]').val() || '';
             var filterMetaValue = $dataContainer.find('input[name="filter_meta_value"]').val() || '';
-            var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+            var source = getDataSource();
+            var table = getDataTable();
 
             fetchTable({
                 action: 'wppc_get_data_table',
                 nonce: wppc_params.nonces.get_data_table,
+                source: source,
                 table: table,
                 filter_post_id: filterPostId,
                 filter_meta_key: filterMetaKey,
@@ -247,10 +269,12 @@ jQuery(document).ready(function($) {
         // Intercept search form "ล้างคำค้น" link click
         $dataContainer.on('click', 'form[method="get"] a.wppc-clear-search', function(e) {
             e.preventDefault();
-            var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+            var source = getDataSource();
+            var table = getDataTable();
             fetchTable({
                 action: 'wppc_get_data_table',
                 nonce: wppc_params.nonces.get_data_table,
+                source: source,
                 table: table,
                 filter_post_id: '',
                 filter_meta_key: '',
@@ -268,7 +292,8 @@ jQuery(document).ready(function($) {
             }
             var href = $(this).attr('href');
             var tableMatch = href.match(/[?&]table=([^&]+)/);
-            var table = tableMatch ? tableMatch[1] : (wppc_params.active_slug || '');
+            var source = getDataSource();
+            var table = tableMatch ? tableMatch[1] : getDataTable();
 
             var $formCard = $form.closest('.wppc-card');
             showLoading($formCard);
@@ -277,12 +302,14 @@ jQuery(document).ready(function($) {
                 action: 'wppc_ajax_get_record',
                 nonce: wppc_params.nonces.get_data_table,
                 meta_id: editId,
+                source: source,
                 table: table
             })
             .done(function(response) {
                 if (response.success) {
                     $form.find('input[name="meta_id"]').val(editId);
                     $form.find('#wppc_post_id').val(response.record.post_id);
+                    $form.find('#wppc_post_id').prop('readonly', source === 'main');
                     $form.find('#wppc_meta_key').val(response.record.meta_key);
                     $form.find('#wppc_meta_value').val(response.record.meta_value);
 
@@ -316,6 +343,7 @@ jQuery(document).ready(function($) {
         $form.on('click', '.wppc-cancel-edit', function(e) {
             e.preventDefault();
             $form.find('#wppc_post_id').val('');
+            $form.find('#wppc_post_id').prop('readonly', false);
             $form.find('#wppc_meta_key').val('');
             $form.find('#wppc_meta_value').val('');
             $form.find('input[name="meta_id"]').val('0');
@@ -327,7 +355,6 @@ jQuery(document).ready(function($) {
         $form.on('submit', function(e) {
             e.preventDefault();
             var $formCard = $form.closest('.wppc-card');
-            showLoading($formCard);
 
             var formData = $form.serializeArray();
             formData = formData.filter(function(item) {
@@ -335,6 +362,7 @@ jQuery(document).ready(function($) {
             });
             formData.push({ name: 'action', value: 'wppc_ajax_save_record' });
             formData.push({ name: 'nonce', value: wppc_params.nonces.save_record });
+            showLoading($formCard);
 
             $.post(wppc_params.ajax_url, formData)
             .done(function(response) {
@@ -343,6 +371,7 @@ jQuery(document).ready(function($) {
 
                     // Reset form and clear edit state
                     $form.find('#wppc_post_id').val('');
+                    $form.find('#wppc_post_id').prop('readonly', false);
                     $form.find('#wppc_meta_key').val('');
                     $form.find('#wppc_meta_value').val('');
                     $form.find('input[name="meta_id"]').val('0');
@@ -354,10 +383,12 @@ jQuery(document).ready(function($) {
                     var filterPostId = $dataContainer.find('input[name="filter_post_id"]').val() || '';
                     var filterMetaKey = $dataContainer.find('input[name="filter_meta_key"]').val() || '';
                     var filterMetaValue = $dataContainer.find('input[name="filter_meta_value"]').val() || '';
-                    var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+                    var source = getDataSource();
+                    var table = getDataTable();
                     fetchTable({
                         action: 'wppc_get_data_table',
                         nonce: wppc_params.nonces.get_data_table,
+                        source: source,
                         table: table,
                         filter_post_id: filterPostId,
                         filter_meta_key: filterMetaKey,
@@ -384,8 +415,9 @@ jQuery(document).ready(function($) {
             }
             var $btn = $(this);
             var $row = $btn.closest('tr');
-            var metaId = $row.find('.wppc-row-cb').val();
-            var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+            var metaId = $btn.data('id') || $row.find('.wppc-row-cb').val();
+            var source = getDataSource();
+            var table = getDataTable();
 
             var $tableCard = $dataContainer.find('.wppc-card');
             showLoading($tableCard);
@@ -394,6 +426,7 @@ jQuery(document).ready(function($) {
                 action: 'wppc_ajax_delete_record',
                 nonce: wppc_params.nonces.delete_record,
                 meta_id: metaId,
+                source: source,
                 table: table
             })
             .done(function(response) {
@@ -407,6 +440,7 @@ jQuery(document).ready(function($) {
                     fetchTable({
                         action: 'wppc_get_data_table',
                         nonce: wppc_params.nonces.get_data_table,
+                        source: source,
                         table: table,
                         filter_post_id: filterPostId,
                         filter_meta_key: filterMetaKey,
@@ -439,13 +473,15 @@ jQuery(document).ready(function($) {
                 return;
             }
 
-            var table = $dataContainer.find('input[name="table"]').val() || wppc_params.active_slug;
+            var source = getDataSource();
+            var table = getDataTable();
             var $tableCard = $dataContainer.find('.wppc-card');
             showLoading($tableCard);
 
             $.post(wppc_params.ajax_url, {
                 action: 'wppc_ajax_bulk_delete',
                 nonce: wppc_params.nonces.bulk_delete,
+                source: source,
                 table: table,
                 bulk_ids: bulkIds
             })
@@ -458,6 +494,7 @@ jQuery(document).ready(function($) {
                     fetchTable({
                         action: 'wppc_get_data_table',
                         nonce: wppc_params.nonces.get_data_table,
+                        source: source,
                         table: table,
                         filter_post_id: filterPostId,
                         filter_meta_key: filterMetaKey,
@@ -478,6 +515,7 @@ jQuery(document).ready(function($) {
         // Truncate Table Hook
         $dataContainer.on('submit', 'form:has(input[name="wppc_action"][value="truncate_table"])', function(e) {
             e.preventDefault();
+            var source = getDataSource();
             var table = $(this).find('input[name="table"]').val() || wppc_params.active_slug;
             if (!confirm('ยืนยันการล้างข้อมูลทั้งหมดในตาราง ' + table + '? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
                 return;
@@ -489,6 +527,7 @@ jQuery(document).ready(function($) {
             $.post(wppc_params.ajax_url, {
                 action: 'wppc_ajax_truncate_table',
                 nonce: wppc_params.nonces.truncate_table,
+                source: source,
                 table: table
             })
             .done(function(response) {
@@ -497,6 +536,7 @@ jQuery(document).ready(function($) {
                     fetchTable({
                         action: 'wppc_get_data_table',
                         nonce: wppc_params.nonces.get_data_table,
+                        source: source,
                         table: table,
                         filter_post_id: '',
                         filter_meta_key: '',
@@ -515,11 +555,13 @@ jQuery(document).ready(function($) {
         });
 
         // Initial load: fetch data table from container data attributes
+        var initSource = $dataContainer.data('source') || wppc_params.active_source || 'custom';
         var initTable = $dataContainer.data('table') || '';
-        if (initTable !== '') {
+        if (initSource === 'main' || initTable !== '') {
             fetchTable({
                 action: 'wppc_get_data_table',
                 nonce: wppc_params.nonces.get_data_table,
+                source: initSource,
                 table: initTable,
                 filter_post_id: $dataContainer.data('post-id') || '',
                 filter_meta_key: $dataContainer.data('meta-key') || '',
